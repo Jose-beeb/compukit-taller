@@ -76,13 +76,26 @@ function initSheets() {
     sheetCash.setFrozenRows(1);
   }
 
-  return { sheetOrders, sheetCash };
+// 3. Hoja de Configuración (Técnicos, etc.)
+  let sheetConfig = ss.getSheetByName("Configuracion_Taller");
+  if (!sheetConfig) {
+    sheetConfig = ss.insertSheet("Configuracion_Taller");
+    const headersConfig = ["Clave", "Valor_JSON", "Ultima_Actualizacion"];
+    sheetConfig.getRange(1, 1, 1, headersConfig.length).setValues([headersConfig]);
+    sheetConfig.getRange(1, 1, 1, headersConfig.length).setFontWeight("bold").setBackground("#374151").setFontColor("#ffffff");
+    sheetConfig.setFrozenRows(1);
+    
+    // Valores por defecto
+    sheetConfig.appendRow(["tecnicos", JSON.stringify(["Principal", "Técnico 1"]), new Date()]);
+  }
+
+  return { sheetOrders, sheetCash, sheetConfig };
 }
 
 // Manejar lectura (GET)
 function doGet(e) {
   try {
-    const { sheetOrders, sheetCash } = initSheets();
+    const { sheetOrders, sheetCash, sheetConfig } = initSheets();
     const action = (e && e.parameter && e.parameter.action) || "read";
 
     if (action === "test") {
@@ -129,10 +142,25 @@ function doGet(e) {
       }
     }
 
+    // Leer Configuración (Técnicos sincronizados)
+    let technicians = ["Principal"];
+    const dataCfg = sheetConfig.getDataRange().getValues();
+    if (dataCfg.length > 1) {
+      for (let i = 1; i < dataCfg.length; i++) {
+        if (dataCfg[i][0] === "tecnicos") {
+          try {
+            technicians = JSON.parse(dataCfg[i][1]);
+          } catch(e) {}
+          break;
+        }
+      }
+    }
+
     return responseJSON({
       status: "success",
       orders: orders,
-      cashFlow: cashFlow
+      cashFlow: cashFlow,
+      technicians: technicians
     });
 
   } catch (error) {
@@ -319,6 +347,26 @@ function doPost(e) {
         action: "update",
         orderId: orderId
       });
+    }
+
+    // 3. SINCRONIZAR TÉCNICOS EN TODOS LOS DISPOSITIVOS
+    if (action === "update_technicians") {
+      const list = payload.technicians || ["Principal"];
+      const dataCfg = sheetConfig.getDataRange().getValues();
+      let rowFound = -1;
+      for (let i = 1; i < dataCfg.length; i++) {
+        if (dataCfg[i][0] === "tecnicos") {
+          rowFound = i + 1;
+          break;
+        }
+      }
+      if (rowFound !== -1) {
+        sheetConfig.getRange(rowFound, 2).setValue(JSON.stringify(list));
+        sheetConfig.getRange(rowFound, 3).setValue(nowStr);
+      } else {
+        sheetConfig.appendRow(["tecnicos", JSON.stringify(list), nowStr]);
+      }
+      return responseJSON({ status: "success", technicians: list });
     }
 
     return responseJSON({ status: "error", message: "Acción no reconocida: " + action });

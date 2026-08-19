@@ -24,6 +24,14 @@
       <span>Compukit</span>
     </div>
     <div class="header-actions">
+      <!-- Selector Visual de Técnico Activo -->
+      <div class="technician-selector-box" title="Técnico que está usando el sistema">
+        <span style="font-size: 1.1rem;">👨‍🔧</span>
+        <select id="active-technician-select" class="technician-select" onchange="window.app && window.app.changeActiveTechnician(this.value)">
+          <!-- Se cargan dinámicamente -->
+        </select>
+      </div>
+
       <div id="sync-status" class="sync-badge" title="Estado de sincronización con Google Sheets">
         <span class="sync-dot offline" id="sync-dot"></span>
         <span id="sync-text">Sin URL Sheets</span>
@@ -265,6 +273,23 @@
         </div>
 
         <div id="custom-services-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <!-- Se cargan dinámicamente -->
+        </div>
+      </div>
+
+      <!-- GESTIÓN DE TÉCNICOS DEL TALLER (SINCRONIZADO) -->
+      <div class="wizard-card" style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 8px;">👨‍🔧 Técnicos y Personal del Taller</h3>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 14px;">
+          Los nombres de los técnicos se sincronizan en todos los celulares y en Google Sheets.
+        </p>
+
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <input type="text" id="new-technician-input" class="form-control" placeholder="Ej: Carlos / Nancy / Luis...">
+          <button class="btn btn-primary" style="min-width: 130px;" onclick="window.app && window.app.addTechnician()">➕ Agregar</button>
+        </div>
+
+        <div id="technicians-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
           <!-- Se cargan dinámicamente -->
         </div>
       </div>

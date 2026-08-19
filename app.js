@@ -21,6 +21,10 @@ class CompukitApp {
       "🔌 Otro Servicio / Dispositivo"
     ];
     this.services = JSON.parse(localStorage.getItem("compukit_services") || JSON.stringify(defaultServices));
+    const defaultTechnicians = ["Principal", "Técnico 1"];
+    this.technicians = JSON.parse(localStorage.getItem("compukit_technicians") || JSON.stringify(defaultTechnicians));
+    this.activeTechnician = localStorage.getItem("compukit_active_tech") || this.technicians[0];
+
     this.selectedPhotoBase64 = "";
     this.activeFilter = "TODOS";
     this.speechRecognition = null;
@@ -32,10 +36,13 @@ class CompukitApp {
   init() {
     this.setupTheme();
     this.setupNavigation();
+    this.renderTechnicianSelector();
+    this.renderTechniciansManager();
     this.renderServiceChips();
     this.renderCustomServicesManager();
     this.setupChipHandlers();
     this.setupVoiceDictation();
+    this.setupSearchHandler();
     this.updateSyncBadge();
 
     // Cargar URL configurada si existe
@@ -58,6 +65,88 @@ class CompukitApp {
         console.warn("Service worker no registrado:", err);
       });
     }
+  }
+
+  /* ==========================================
+     GESTIÓN DE TÉCNICOS SINCRONIZADOS (NUBE)
+     ========================================== */
+  renderTechnicianSelector() {
+    const select = document.getElementById("active-technician-select");
+    if (!select) return;
+
+    select.innerHTML = this.technicians.map(tech => `
+      <option value="${this.escapeHTML(tech)}" ${tech === this.activeTechnician ? 'selected' : ''}>
+        ${this.escapeHTML(tech)}
+      </option>
+    `).join("");
+  }
+
+  changeActiveTechnician(techName) {
+    this.activeTechnician = techName;
+    localStorage.setItem("compukit_active_tech", techName);
+  }
+
+  renderTechniciansManager() {
+    const container = document.getElementById("technicians-list");
+    if (!container) return;
+
+    container.innerHTML = this.technicians.map((tech, index) => `
+      <div style="display: inline-flex; align-items: center; gap: 6px; background-color: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 12px; font-weight: bold; font-size: 0.95rem;">
+        <span>👤 ${this.escapeHTML(tech)}</span>
+        <button type="button" onclick="window.app && window.app.deleteTechnician(${index})" style="background: none; border: none; cursor: pointer; font-size: 1rem; color: var(--danger); margin-left: 4px;" title="Eliminar técnico">❌</button>
+      </div>
+    `).join("");
+  }
+
+  addTechnician() {
+    const input = document.getElementById("new-technician-input");
+    if (!input) return;
+    const val = input.value.trim();
+    if (!val) {
+      alert("Por favor escribe el nombre del técnico.");
+      return;
+    }
+
+    if (this.technicians.includes(val)) {
+      alert("Este técnico ya se encuentra registrado.");
+      return;
+    }
+
+    this.technicians.push(val);
+    localStorage.setItem("compukit_technicians", JSON.stringify(this.technicians));
+    input.value = "";
+    this.renderTechnicianSelector();
+    this.renderTechniciansManager();
+
+    // Sincronizar con Google Sheets para que aparezca en los demás celulares
+    this.syncTechniciansToCloud();
+    alert(`✅ Técnico añadido y sincronizado: "${val}"`);
+  }
+
+  deleteTechnician(index) {
+    if (this.technicians.length <= 1) {
+      alert("Debes mantener al menos un técnico registrado.");
+      return;
+    }
+    const removed = this.technicians.splice(index, 1);
+    if (this.activeTechnician === removed[0]) {
+      this.activeTechnician = this.technicians[0];
+      localStorage.setItem("compukit_active_tech", this.activeTechnician);
+    }
+    localStorage.setItem("compukit_technicians", JSON.stringify(this.technicians));
+    this.renderTechnicianSelector();
+    this.renderTechniciansManager();
+
+    // Sincronizar eliminación en la nube
+    this.syncTechniciansToCloud();
+  }
+
+  syncTechniciansToCloud() {
+    if (!this.sheetsUrl) return;
+    this.queueSync({
+      action: "update_technicians",
+      technicians: this.technicians
+    });
   }
 
   /* ==========================================
@@ -686,6 +775,17 @@ class CompukitApp {
           localStorage.setItem("compukit_cashflow", JSON.stringify(this.cashFlow));
         }
 
+        if (Array.isArray(data.technicians) && data.technicians.length > 0) {
+          this.technicians = data.technicians;
+          localStorage.setItem("compukit_technicians", JSON.stringify(this.technicians));
+          if (!this.technicians.includes(this.activeTechnician)) {
+            this.activeTechnician = this.technicians[0];
+            localStorage.setItem("compukit_active_tech", this.activeTechnician);
+          }
+          this.renderTechnicianSelector();
+          this.renderTechniciansManager();
+        }
+
         const resEl = document.getElementById("config-test-result");
         if (resEl) resEl.innerHTML = `<span style="color: var(--success);">✅ Conexión Exitosa. Sincronizado con Google Sheets & Drive.</span>`;
         this.renderEquipmentList();
@@ -695,6 +795,18 @@ class CompukitApp {
       console.warn("Error al consultar Google Sheets:", err);
     } finally {
       this.updateSyncBadge();
+    }
+  }
+
+  setupSearchHandler() {
+    const searchInput = document.getElementById("search-input");
+    if (searchInput) {
+      // Escuchar eventos input, keyup y search (cuando se borra con la X del navegador)
+      ['input', 'keyup', 'change', 'search'].forEach(evt => {
+        searchInput.addEventListener(evt, () => {
+          this.filterRecords();
+        });
+      });
     }
   }
 
@@ -769,7 +881,9 @@ class CompukitApp {
       const matchSearch = 
         (r.Cliente || "").toLowerCase().includes(searchTerm) ||
         (r.Telefono || "").toLowerCase().includes(searchTerm) ||
+        (r.Tipo_Equipo || "").toLowerCase().includes(searchTerm) ||
         (r.Marca_Modelo || "").toLowerCase().includes(searchTerm) ||
+        (r.Falla_Reportada || "").toLowerCase().includes(searchTerm) ||
         (r.ID_Orden || "").toLowerCase().includes(searchTerm);
 
       if (!matchSearch) return false;
