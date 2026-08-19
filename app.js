@@ -914,26 +914,29 @@ class CompukitApp {
       cleanPhone = "593" + cleanPhone.substring(1);
     }
 
+    // Limpiar posibles emojis rotos o caracteres incompatibles en el tipo de equipo
+    const cleanEquipment = String(equipment || "Equipo").replace(/[^\p{L}\p{N}\s\/\-\.]/gu, "").trim();
+
     const formattedCost = `$${parseFloat(cost || 0).toFixed(2)}`;
-    const issueDetail = issue ? `\n🔍 *Diagnóstico / Falla:* ${issue}` : "";
-    const workDetail = workDone ? `\n🛠️ *Solución / Trabajo:* ${workDone}` : "";
+    const issueDetail = issue ? `\n*Diagnóstico / Falla:* ${issue}` : "";
+    const workDetail = workDone ? `\n*Solución / Trabajo:* ${workDone}` : "";
 
     let msg = "";
     if (status === "Esperando Aprobación") {
-      msg = `Hola ${name}, le saludamos de *COMPUKIT*.\n\nHemos finalizado la revisión y diagnóstico de su *${equipment}*:\n${issueDetail}${workDetail}\n\n💵 *Costo Estimado:* *${formattedCost}*\n\n¿Desea que procedamos con el trabajo? Por favor nos confirma para iniciar.`;
+      msg = `Hola ${name}, le saludamos de *COMPUKIT*.\n\nHemos finalizado la revisión y diagnóstico de su *${cleanEquipment}*:\n${issueDetail}${workDetail}\n\n*Costo Estimado:* *${formattedCost}*\n\n¿Desea que procedamos con el trabajo? Por favor nos confirma para iniciar.`;
     } else if (status === "En Diagnóstico") {
-      msg = `Hola ${name}, le saludamos de *COMPUKIT*. Le informamos que su *${equipment}* se encuentra actualmente en proceso de *revisión y diagnóstico técnico*. Le notificaremos apenas tengamos el informe detallado y costo.`;
+      msg = `Hola ${name}, le saludamos de *COMPUKIT*. Le informamos que su *${cleanEquipment}* se encuentra actualmente en proceso de *revisión y diagnóstico técnico*. Le notificaremos apenas tengamos el informe detallado y costo.`;
     } else if (status === "En Reparación") {
-      msg = `Hola ${name}, le saludamos de *COMPUKIT*. Le confirmamos que su *${equipment}* ya se encuentra *en proceso de reparación*.`;
+      msg = `Hola ${name}, le saludamos de *COMPUKIT*. Le confirmamos que su *${cleanEquipment}* ya se encuentra *en proceso de reparación*.`;
     } else if (status === "Listo") {
-      msg = `Hola ${name}, le saludamos de *COMPUKIT*. ¡Su *${equipment}* ya está *LISTO* para retirar! ✅\n\n💵 *Total a pagar:* *${formattedCost}*\n\nPuede pasar retirándolo en nuestro horario habitual.`;
+      msg = `Hola ${name}, le saludamos de *COMPUKIT*. ¡Su *${cleanEquipment}* ya está *LISTO* para retirar!\n\n*Total a pagar:* *${formattedCost}*\n\nPuede pasar retirándolo en nuestro horario habitual.`;
     } else if (status === "Entregado") {
-      msg = `Hola ${name}, gracias por confiar en *COMPUKIT*. Le confirmamos la entrega conforme de su *${equipment}*. ¡Estamos a la orden!`;
+      msg = `Hola ${name}, gracias por confiar en *COMPUKIT*. Le confirmamos la entrega conforme de su *${cleanEquipment}*. ¡Estamos a la orden!`;
     } else {
-      msg = `Hola ${name}, le saludamos de *COMPUKIT*. Su equipo *${equipment}* se encuentra registrado en estado: *${status}*.`;
+      msg = `Hola ${name}, le saludamos de *COMPUKIT*. Su equipo *${cleanEquipment}* se encuentra registrado en estado: *${status}*.`;
     }
 
-    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+    const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
     window.open(waUrl, "_blank");
   }
 
