@@ -20,10 +20,7 @@ class CompukitApp {
       "🖥️ Monitor / Pantalla",
       "🔌 Otro Servicio / Dispositivo"
     ];
-    const defaultTechnicians = ["Principal", "Técnico 1", "Técnico 2"];
-    this.technicians = JSON.parse(localStorage.getItem("compukit_technicians") || JSON.stringify(defaultTechnicians));
-    this.activeTechnician = localStorage.getItem("compukit_active_tech") || this.technicians[0];
-
+    this.services = JSON.parse(localStorage.getItem("compukit_services") || JSON.stringify(defaultServices));
     this.selectedPhotoBase64 = "";
     this.activeFilter = "TODOS";
     this.speechRecognition = null;
@@ -35,8 +32,6 @@ class CompukitApp {
   init() {
     this.setupTheme();
     this.setupNavigation();
-    this.renderTechnicianSelector();
-    this.renderTechniciansManager();
     this.renderServiceChips();
     this.renderCustomServicesManager();
     this.setupChipHandlers();
@@ -63,74 +58,6 @@ class CompukitApp {
         console.warn("Service worker no registrado:", err);
       });
     }
-  }
-
-  /* ==========================================
-     GESTIÓN DE TÉCNICOS DEL TALLER
-     ========================================== */
-  renderTechnicianSelector() {
-    const select = document.getElementById("active-technician-select");
-    if (!select) return;
-
-    select.innerHTML = this.technicians.map(tech => `
-      <option value="${this.escapeHTML(tech)}" ${tech === this.activeTechnician ? 'selected' : ''}>
-        ${this.escapeHTML(tech)}
-      </option>
-    `).join("");
-  }
-
-  changeActiveTechnician(techName) {
-    this.activeTechnician = techName;
-    localStorage.setItem("compukit_active_tech", techName);
-  }
-
-  renderTechniciansManager() {
-    const container = document.getElementById("technicians-list");
-    if (!container) return;
-
-    container.innerHTML = this.technicians.map((tech, index) => `
-      <div style="display: inline-flex; align-items: center; gap: 6px; background-color: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 12px; font-weight: bold; font-size: 0.95rem;">
-        <span>👤 ${this.escapeHTML(tech)}</span>
-        <button type="button" onclick="window.app && window.app.deleteTechnician(${index})" style="background: none; border: none; cursor: pointer; font-size: 1rem; color: var(--danger); margin-left: 4px;" title="Eliminar técnico">❌</button>
-      </div>
-    `).join("");
-  }
-
-  addTechnician() {
-    const input = document.getElementById("new-technician-input");
-    if (!input) return;
-    const val = input.value.trim();
-    if (!val) {
-      alert("Por favor escribe el nombre del técnico.");
-      return;
-    }
-
-    if (this.technicians.includes(val)) {
-      alert("Este técnico ya se encuentra registrado.");
-      return;
-    }
-
-    this.technicians.push(val);
-    localStorage.setItem("compukit_technicians", JSON.stringify(this.technicians));
-    input.value = "";
-    this.renderTechnicianSelector();
-    this.renderTechniciansManager();
-    alert(`✅ Técnico añadido: "${val}"`);
-  }
-
-  deleteTechnician(index) {
-    if (this.technicians.length <= 1) {
-      alert("Debes mantener al menos un técnico registrado.");
-      return;
-    }
-    const removed = this.technicians.splice(index, 1);
-    if (this.activeTechnician === removed[0]) {
-      this.activeTechnician = this.technicians[0];
-      localStorage.setItem("compukit_active_tech", this.activeTechnician);
-    }
-    localStorage.setItem("compukit_technicians", JSON.stringify(this.technicians));
-    this.renderTechnicianSelector();
-    this.renderTechniciansManager();
   }
 
   /* ==========================================
@@ -255,7 +182,6 @@ class CompukitApp {
     } else if (viewId === 'view-reportes') {
       this.renderStats();
     } else if (viewId === 'view-config') {
-      this.renderTechniciansManager();
       this.renderCustomServicesManager();
     }
   }
