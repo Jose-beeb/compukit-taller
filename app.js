@@ -1072,15 +1072,23 @@ class CompukitApp {
   }
 
   showTicketModal(orderId) {
-    const order = this.orders.find(o => o.ID_Orden === orderId);
-    if (!order) return;
+    if (!orderId) {
+      alert("No se pudo identificar la orden para el ticket.");
+      return;
+    }
+
+    const order = this.orders.find(o => String(o.ID_Orden).trim() === String(orderId).trim());
+    if (!order) {
+      alert(`No se encontró la orden ${orderId}`);
+      return;
+    }
 
     this.currentTicketRecord = order;
 
     const dateStr = order.Fecha_Ingreso || new Date().toLocaleString();
     const idStr = order.ID_Orden || "";
-    const clientStr = order.Cliente || "";
-    const phoneStr = order.Telefono || "";
+    const clientStr = order.Cliente || "Consumidor Final";
+    const phoneStr = order.Telefono || "S/N";
     const eqStr = `${order.Tipo_Equipo || ""} ${order.Marca_Modelo || ""}`.trim();
     const accStr = order.Accesorios || "Ninguno";
     const issueStr = order.Falla_Reportada || "Sin detalle";
@@ -1100,7 +1108,10 @@ class CompukitApp {
     document.querySelectorAll(".ticket-advance-val").forEach(el => el.textContent = advanceStr);
     document.querySelectorAll(".ticket-balance-val").forEach(el => el.textContent = balanceStr);
 
-    document.getElementById("modal-ticket").classList.add("active");
+    const modalEl = document.getElementById("modal-ticket");
+    if (modalEl) {
+      modalEl.classList.add("active");
+    }
   }
 
   closeModal(modalId) {
