@@ -485,7 +485,7 @@ class CompukitApp {
     const newIssue = document.getElementById("update-issue-description").value.trim();
     const workDone = document.getElementById("update-work-done").value.trim();
     const totalCost = parseFloat(document.getElementById("update-total-cost").value) || 0;
-    const advanceCost = parseFloat(document.getElementById("update-advance-cost")?.value) || 0;
+    const initialAdvance = parseFloat(document.getElementById("update-advance-cost")?.value) || 0;
 
     const order = this.orders.find(o => o.ID_Orden === orderId);
     if (!order) return;
@@ -495,16 +495,35 @@ class CompukitApp {
     if (newIssue) order.Falla_Reportada = newIssue;
     order.Trabajo_Realizado = workDone;
     order.Costo_Total = totalCost;
-    order.Abono = advanceCost;
-    order.Saldo_Pendiente = totalCost - advanceCost;
-    order._sync_status = "Pendiente";
 
     let finalPayment = 0;
     if (newStatus === "Entregado") {
       order.Fecha_Entrega = nowStr;
-      finalPayment = order.Saldo_Pendiente > 0 ? order.Saldo_Pendiente : 0;
+      const paymentType = document.getElementById("update-payment-type")?.value || "FULL";
+      const deliveryPaidInput = parseFloat(document.getElementById("delivery-amount-paid")?.value) || 0;
+      
+      if (paymentType === "FULL") {
+        // Se cobró el saldo completo restante
+        finalPayment = Math.max(0, totalCost - initialAdvance);
+        order.Abono = totalCost;
+        order.Saldo_Pendiente = 0;
+      } else if (paymentType === "PARTIAL") {
+        // Se cobró un monto parcial al entregar
+        finalPayment = deliveryPaidInput;
+        order.Abono = initialAdvance + deliveryPaidInput;
+        order.Saldo_Pendiente = Math.max(0, totalCost - order.Abono);
+      } else {
+        // Sin cobro al entregar (quedó a crédito)
+        finalPayment = 0;
+        order.Abono = initialAdvance;
+        order.Saldo_Pendiente = Math.max(0, totalCost - initialAdvance);
+      }
+    } else {
+      order.Abono = initialAdvance;
+      order.Saldo_Pendiente = Math.max(0, totalCost - initialAdvance);
     }
 
+    order._sync_status = "Pendiente";
     this.saveOrdersLocal();
 
     const updatePayload = {
@@ -514,9 +533,8 @@ class CompukitApp {
       Estado: newStatus,
       Falla_Reportada: order.Falla_Reportada,
       Trabajo_Realizado: workDone,
-      Tecnico_Responsable: this.activeTechnician || "Principal",
       Costo_Total: totalCost,
-      Abono: advanceCost,
+      Abono: order.Abono,
       Fecha_Entrega: order.Fecha_Entrega || "",
       Cobro_Final: finalPayment,
       Metodo_Pago: "Efectivo"
@@ -526,7 +544,72 @@ class CompukitApp {
 
     this.closeModal("modal-status");
     this.renderEquipmentList();
-    alert("✅ Diagnóstico, costo y abono actualizados correctamente.");
+    this.renderStats();
+    alert(`✅ Estado actualizado: ${newStatus}\n${newStatus === 'Entregado' ? `💵 Cobrado hoy: $${finalPayment.toFixed(2)} | Saldo pendiente: $${order.Saldo_Pendiente.toFixed(2)}` : ''}`);
+  }
+
+  /* ==========================================
+     MANEJO DE SECCIÓN DE COBRO EN MODAL
+     ========================================== */
+  onStatusSelectChange() {
+    const status = document.getElementById("update-status-select").value;
+    const deliverySection = document.getElementById("delivery-payment-section");
+    if (deliverySection) {
+      if (status === "Entregado") {
+        deliverySection.style.display = "block";
+        this.onPaymentTypeChange();
+      } else {
+        deliverySection.style.display = "none";
+      }
+    }
+  }
+
+  onPaymentTypeChange() {
+    const type = document.getElementById("update-payment-type")?.value || "FULL";
+    const amountGroup = document.getElementById("delivery-amount-group");
+    const totalCost = parseFloat(document.getElementById("update-total-cost")?.value) || 0;
+    const advance = parseFloat(document.getElementById("update-advance-cost")?.value) || 0;
+    const pendingBalance = Math.max(0, totalCost - advance);
+
+    const paidInput = document.getElementById("delivery-amount-paid");
+
+    if (type === "FULL") {
+      if (amountGroup) amountGroup.style.display = "none";
+      if (paidInput) paidInput.value = pendingBalance.toFixed(2);
+    } else if (type === "PARTIAL") {
+      if (amountGroup) amountGroup.style.display = "block";
+      if (paidInput && (!paidInput.value || parseFloat(paidInput.value) <= 0)) {
+        paidInput.value = (pendingBalance / 2).toFixed(2);
+      }
+    } else {
+      // NONE
+      if (amountGroup) amountGroup.style.display = "none";
+      if (paidInput) paidInput.value = "0.00";
+    }
+
+    this.recalculateDeliveryBalance();
+  }
+
+  recalculateDeliveryBalance() {
+    const totalCost = parseFloat(document.getElementById("update-total-cost")?.value) || 0;
+    const advance = parseFloat(document.getElementById("update-advance-cost")?.value) || 0;
+    const type = document.getElementById("update-payment-type")?.value || "FULL";
+    const preview = document.getElementById("delivery-balance-preview");
+    if (!preview) return;
+
+    let pendingAfterDelivery = 0;
+    if (type === "FULL") {
+      pendingAfterDelivery = 0;
+    } else if (type === "PARTIAL") {
+      const deliveryPaid = parseFloat(document.getElementById("delivery-amount-paid")?.value) || 0;
+      pendingAfterDelivery = Math.max(0, totalCost - advance - deliveryPaid);
+    } else {
+      pendingAfterDelivery = Math.max(0, totalCost - advance);
+    }
+
+    preview.innerHTML = pendingAfterDelivery > 0 
+      ? `⚠️ Saldo que quedará pendiente por cobrar: <span style="color: var(--danger); font-size: 1.15rem;">$${pendingAfterDelivery.toFixed(2)}</span>`
+      : `✅ ¡Todo pagado! Saldo restante: <span style="color: var(--success); font-size: 1.15rem;">$0.00</span>`;
   }
 
   /* ==========================================
@@ -866,6 +949,7 @@ class CompukitApp {
     const advanceInput = document.getElementById("update-advance-cost");
     if (advanceInput) advanceInput.value = order.Abono || 0;
 
+    this.onStatusSelectChange();
     document.getElementById("modal-status").classList.add("active");
   }
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "compukit-cache-v13";
+const CACHE_NAME = "compukit-cache-v14";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -9,11 +9,6 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
-  );
   self.skipWaiting();
 });
 
@@ -32,18 +27,28 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
+// Estrategia Network-First: Primero pide a la red para tener siempre la última versión fresca.
+// Si no hay internet (offline), responde inmediatamente con la copia en caché.
 self.addEventListener("fetch", (event) => {
   if (event.request.method === "GET" && !event.request.url.includes("script.google.com")) {
     event.respondWith(
       fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const responseToCache = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
           }
-          return response;
+          return networkResponse;
         })
-        .catch(() => caches.match(event.request))
+        .catch(() => {
+          return caches.match(event.request).then((cachedResponse) => {
+            if (cachedResponse) return cachedResponse;
+            if (event.request.headers.get("accept")?.includes("text/html")) {
+              return caches.match("./index.html");
+            }
+          });
+        })
     );
   }
 });
+
