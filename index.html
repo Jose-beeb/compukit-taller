@@ -405,26 +405,69 @@
         <button class="icon-btn" onclick="window.app && window.app.closeModal('modal-ticket')">✖️</button>
       </div>
 
-      <div id="printable-ticket" class="ticket-container">
-        <div class="ticket-header">
-          <h2>COMPUKIT</h2>
-          <p>Taller de Reparación y Mantenimiento</p>
-          <p id="ticket-date" style="font-size: 0.85rem;"></p>
+      <div id="printable-ticket" class="ticket-dual-container">
+        
+        <!-- COPIA 1: CLIENTE -->
+        <div class="ticket-half">
+          <div class="ticket-copy-tag">📋 COPIA CLIENTE</div>
+          <div class="ticket-header">
+            <h2>COMPUKIT</h2>
+            <p>Taller de Reparación y Mantenimiento</p>
+            <p class="ticket-date-val" style="font-size: 0.85rem;"></p>
+          </div>
+
+          <div class="ticket-row"><strong>N° Orden:</strong> <span class="ticket-id-val"></span></div>
+          <div class="ticket-row"><strong>Cliente:</strong> <span class="ticket-client-val"></span></div>
+          <div class="ticket-row"><strong>Teléfono:</strong> <span class="ticket-phone-val"></span></div>
+          <div class="ticket-row"><strong>Equipo:</strong> <span class="ticket-equipment-val"></span></div>
+          <div class="ticket-row"><strong>Accesorios:</strong> <span class="ticket-acc-val"></span></div>
+          <div style="margin-top: 6px;">
+            <strong>Falla Reportada:</strong>
+            <p class="ticket-issue-val" style="margin-top: 2px; font-style: italic;"></p>
+          </div>
+          <div class="ticket-row">
+            <span>Abono: <strong class="ticket-advance-val">$0.00</strong></span>
+            <span>Saldo: <strong class="ticket-balance-val">$0.00</strong></span>
+          </div>
+          <div class="ticket-total ticket-row">
+            <span>Total Est.:</span>
+            <span class="ticket-cost-val">$0.00</span>
+          </div>
         </div>
 
-        <div class="ticket-row"><strong>N° Orden:</strong> <span id="ticket-id"></span></div>
-        <div class="ticket-row"><strong>Cliente:</strong> <span id="ticket-client"></span></div>
-        <div class="ticket-row"><strong>Teléfono:</strong> <span id="ticket-phone"></span></div>
-        <div class="ticket-row"><strong>Equipo:</strong> <span id="ticket-equipment"></span></div>
-        <div class="ticket-row"><strong>Accesorios:</strong> <span id="ticket-acc"></span></div>
-        <div style="margin-top: 8px;">
-          <strong>Falla Reportada:</strong>
-          <p id="ticket-issue" style="margin-top: 4px; font-style: italic;"></p>
+        <!-- LÍNEA DE CORTE PARA PARTIR LA HOJA -->
+        <div class="cut-line">
+          <span>✂️ - - - - - - - - - - - - - - - CORTAR AQUÍ - - - - - - - - - - - - - - - ✂️</span>
         </div>
-        <div class="ticket-total ticket-row">
-          <span>Total Est.:</span>
-          <span id="ticket-cost">$0.00</span>
+
+        <!-- COPIA 2: TALLER / CONTROL INTERNO -->
+        <div class="ticket-half">
+          <div class="ticket-copy-tag">🏢 COPIA TALLER (CONTROL INTERNO)</div>
+          <div class="ticket-header">
+            <h2>COMPUKIT</h2>
+            <p>Taller de Reparación y Mantenimiento</p>
+            <p class="ticket-date-val" style="font-size: 0.85rem;"></p>
+          </div>
+
+          <div class="ticket-row"><strong>N° Orden:</strong> <span class="ticket-id-val"></span></div>
+          <div class="ticket-row"><strong>Cliente:</strong> <span class="ticket-client-val"></span></div>
+          <div class="ticket-row"><strong>Teléfono:</strong> <span class="ticket-phone-val"></span></div>
+          <div class="ticket-row"><strong>Equipo:</strong> <span class="ticket-equipment-val"></span></div>
+          <div class="ticket-row"><strong>Accesorios:</strong> <span class="ticket-acc-val"></span></div>
+          <div style="margin-top: 6px;">
+            <strong>Falla Reportada:</strong>
+            <p class="ticket-issue-val" style="margin-top: 2px; font-style: italic;"></p>
+          </div>
+          <div class="ticket-row">
+            <span>Abono: <strong class="ticket-advance-val">$0.00</strong></span>
+            <span>Saldo: <strong class="ticket-balance-val">$0.00</strong></span>
+          </div>
+          <div class="ticket-total ticket-row">
+            <span>Total Est.:</span>
+            <span class="ticket-cost-val">$0.00</span>
+          </div>
         </div>
+
       </div>
 
       <div class="btn-group" style="margin-top: 16px;">

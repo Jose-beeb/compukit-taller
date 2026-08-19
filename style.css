@@ -729,7 +729,7 @@ textarea.form-control {
   font-weight: 800;
 }
 
-/* Modal Ticket para Impresión */
+/* Modal Ticket para Impresión y Descarga en Doble Copia (Cliente y Taller) */
 @media print {
   body * {
     visibility: hidden;
@@ -742,45 +742,85 @@ textarea.form-control {
     left: 0;
     top: 0;
     width: 100%;
-    padding: 20px;
+    margin: 0;
+    padding: 10px;
     color: #000;
     background: #fff;
+    border: none;
+  }
+  .modal-overlay, .modal-card {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+  .modal-header, .btn-group {
+    display: none !important;
   }
 }
 
-.ticket-container {
+.ticket-dual-container {
   background: #ffffff;
   color: #000000;
-  padding: 20px;
+  padding: 15px;
   border-radius: var(--radius-md);
-  border: 2px dashed #333;
+  border: 1px solid #ddd;
   font-family: 'Courier New', Courier, monospace;
+}
+
+.ticket-half {
+  padding: 12px;
+  border: 1px dashed #444;
+  border-radius: var(--radius-sm);
+  background-color: #fafafa;
+}
+
+.ticket-copy-tag {
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+  padding: 4px 8px;
+  background-color: #e2e8f0;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  color: #0f172a;
+}
+
+.cut-line {
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: #64748b;
+  margin: 16px 0;
+  letter-spacing: 2px;
+  user-select: none;
 }
 
 .ticket-header {
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   border-bottom: 1px dashed #000;
-  padding-bottom: 10px;
+  padding-bottom: 6px;
 }
 
 .ticket-header h2 {
-  font-size: 1.5rem;
-  margin-bottom: 4px;
+  font-size: 1.3rem;
+  margin-bottom: 2px;
 }
 
 .ticket-row {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  font-size: 0.95rem;
 }
 
 .ticket-total {
-  font-size: 1.3rem;
+  font-size: 1.15rem;
   font-weight: bold;
   border-top: 1px dashed #000;
-  padding-top: 8px;
-  margin-top: 12px;
+  padding-top: 6px;
+  margin-top: 8px;
 }
 
 /* Estilos de Tarjetas del Reporte Financiero */
