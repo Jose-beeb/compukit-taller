@@ -1071,6 +1071,16 @@ class CompukitApp {
     document.getElementById("modal-status").classList.add("active");
   }
 
+  cleanTextForTicket(str) {
+    if (!str) return "";
+    // Remover emojis, símbolos gráficos de 4 bytes y dejar caracteres latinos legibles
+    return String(str)
+      .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F018}-\u{1F270}\u{2388}-\u{2B55}\u{FE00}-\u{FE0F}]/gu, "")
+      .replace(/[ØÜË»Ý]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   showTicketModal(orderId) {
     if (!orderId) {
       alert("No se pudo identificar la orden para el ticket.");
@@ -1087,11 +1097,11 @@ class CompukitApp {
 
     const dateStr = order.Fecha_Ingreso || new Date().toLocaleString();
     const idStr = order.ID_Orden || "";
-    const clientStr = order.Cliente || "Consumidor Final";
+    const clientStr = this.cleanTextForTicket(order.Cliente) || "Consumidor Final";
     const phoneStr = order.Telefono || "S/N";
-    const eqStr = `${order.Tipo_Equipo || ""} ${order.Marca_Modelo || ""}`.trim();
-    const accStr = order.Accesorios || "Ninguno";
-    const issueStr = order.Falla_Reportada || "Sin detalle";
+    const eqStr = `${this.cleanTextForTicket(order.Tipo_Equipo)} - ${this.cleanTextForTicket(order.Marca_Modelo)}`.trim();
+    const accStr = this.cleanTextForTicket(order.Accesorios) || "Ninguno";
+    const issueStr = this.cleanTextForTicket(order.Falla_Reportada) || "Sin detalle";
     const totalCostStr = `$${parseFloat(order.Costo_Total || 0).toFixed(2)}`;
     const advanceStr = `$${parseFloat(order.Abono || 0).toFixed(2)}`;
     const balanceStr = `$${parseFloat(order.Saldo_Pendiente || 0).toFixed(2)}`;
@@ -1125,7 +1135,7 @@ class CompukitApp {
       return;
     }
     const { jsPDF } = window.jspdf;
-    // Formato estándar A4 o Media Hoja con dos copias
+    // Formato estándar A4 con dos copias
     const doc = new jsPDF({
       unit: 'mm',
       format: 'a4'
@@ -1134,14 +1144,19 @@ class CompukitApp {
     const rec = this.currentTicketRecord;
     if (!rec) return;
 
-    // Función para renderizar 1 copia
+    const cleanClient = this.cleanTextForTicket(rec.Cliente) || "Consumidor Final";
+    const cleanEq = `${this.cleanTextForTicket(rec.Tipo_Equipo)} - ${this.cleanTextForTicket(rec.Marca_Modelo)}`.trim();
+    const cleanAcc = this.cleanTextForTicket(rec.Accesorios) || "Ninguno";
+    const cleanIssue = this.cleanTextForTicket(rec.Falla_Reportada) || "Por diagnosticar";
+
+    // Función para renderizar 1 copia 100% limpia sin emojis
     const printCopy = (startY, titleTag) => {
       let y = startY;
       doc.setFillColor(240, 240, 240);
       doc.rect(15, y, 180, 8, 'F');
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.text(titleTag, 105, y + 6, { align: "center" });
+      doc.setFontSize(10);
+      doc.text(titleTag, 105, y + 5.5, { align: "center" });
       y += 14;
 
       doc.setFont("helvetica", "bold");
@@ -1150,7 +1165,7 @@ class CompukitApp {
       y += 6;
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text(`Fecha: ${rec.Fecha_Ingreso || new Date().toLocaleString()}   |   N° Orden: ${rec.ID_Orden}`, 105, y, { align: "center" });
+      doc.text(`Fecha: ${rec.Fecha_Ingreso || new Date().toLocaleString()}   |   N Orden: ${rec.ID_Orden}`, 105, y, { align: "center" });
       y += 4;
       doc.setDrawColor(180, 180, 180);
       doc.line(15, y, 195, y);
@@ -1160,25 +1175,25 @@ class CompukitApp {
       doc.setFont("helvetica", "bold");
       doc.text("Cliente:", 15, y);
       doc.setFont("helvetica", "normal");
-      doc.text(`${rec.Cliente}   (Tel: ${rec.Telefono})`, 38, y);
+      doc.text(`${cleanClient}   (Tel: ${rec.Telefono || 'S/N'})`, 38, y);
       y += 6;
 
       doc.setFont("helvetica", "bold");
       doc.text("Equipo:", 15, y);
       doc.setFont("helvetica", "normal");
-      doc.text(`${rec.Tipo_Equipo} - ${rec.Marca_Modelo}`, 38, y);
+      doc.text(cleanEq, 38, y);
       y += 6;
 
       doc.setFont("helvetica", "bold");
       doc.text("Accesorios:", 15, y);
       doc.setFont("helvetica", "normal");
-      doc.text(`${rec.Accesorios || "Ninguno"}`, 38, y);
+      doc.text(cleanAcc, 38, y);
       y += 6;
 
       doc.setFont("helvetica", "bold");
       doc.text("Falla / Motivo:", 15, y);
       doc.setFont("helvetica", "italic");
-      const splitIssue = doc.splitTextToSize(rec.Falla_Reportada || "Por diagnosticar", 155);
+      const splitIssue = doc.splitTextToSize(cleanIssue, 155);
       doc.text(splitIssue, 43, y);
       y += (splitIssue.length * 5) + 3;
 
@@ -1197,19 +1212,19 @@ class CompukitApp {
       doc.text("Firma de Conformidad Cliente / Taller: ____________________________", 105, y + 4, { align: "center" });
     };
 
-    // COPIA 1: CLIENTE (Mitad Superior de la Hoja)
-    printCopy(12, "📋 COPIA CLIENTE - COMPROBANTE DE RECEPCIÓN");
+    // COPIA 1: CLIENTE (Mitad Superior)
+    printCopy(12, "COPIA CLIENTE - COMPROBANTE DE RECEPCION");
 
     // LÍNEA DE CORTE CENTRAL
     doc.setLineDashPattern([2, 2], 0);
     doc.setDrawColor(100, 100, 100);
     doc.line(10, 148, 200, 148);
     doc.setFontSize(8);
-    doc.text("✂️ - - - - - - - - - - - - - - - - - - - CORTAR AQUÍ POR LA MITAD - - - - - - - - - - - - - - - - - - - ✂️", 105, 147, { align: "center" });
+    doc.text("- - - - - - - - - - - - - - - - - - - CORTAR AQUI POR LA MITAD - - - - - - - - - - - - - - - - - - -", 105, 147, { align: "center" });
     doc.setLineDashPattern([], 0); // Restaurar línea sólida
 
-    // COPIA 2: TALLER (Mitad Inferior de la Hoja)
-    printCopy(160, "🏢 COPIA TALLER - CONTROL INTERNO");
+    // COPIA 2: TALLER (Mitad Inferior)
+    printCopy(160, "COPIA TALLER - CONTROL INTERNO");
 
     doc.save(`Ticket_Doble_${rec.ID_Orden}.pdf`);
   }
