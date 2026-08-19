@@ -229,7 +229,15 @@ class CompukitApp {
   }
 
   setupNavigation() {
-    // Escucha cambios de vista
+    // Vincular botones de barra inferior de forma nativa
+    const navButtons = document.querySelectorAll(".bottom-nav .nav-item");
+    const views = ['view-ingreso', 'view-taller', 'view-reportes', 'view-config'];
+    navButtons.forEach((btn, idx) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.switchView(views[idx], btn);
+      });
+    });
   }
 
   switchView(viewId, targetBtn) {
@@ -1009,12 +1017,23 @@ class CompukitApp {
   }
 }
 
-// Inicializar inmediatamente y vincular a window y al scope global
-try {
-  window.app = new CompukitApp();
-  var app = window.app;
-} catch (e) {
-  console.error("Error al inicializar CompukitApp:", e);
+// Inicializar de forma completamente resiliente
+function startApp() {
+  if (!window.app) {
+    try {
+      window.app = new CompukitApp();
+      window.compukit = window.app;
+    } catch (e) {
+      console.error("Error al instanciar CompukitApp:", e);
+    }
+  }
 }
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
+
 
 

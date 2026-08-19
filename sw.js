@@ -1,4 +1,4 @@
-const CACHE_NAME = "compukit-cache-v10";
+const CACHE_NAME = "compukit-cache-v12";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
