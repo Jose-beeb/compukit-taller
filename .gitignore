@@ -1,0 +1,20 @@
+# Archivos temporales y de desarrollo
+node_modules/
+dist/
+build/
+.cache/
+*.log
+
+# Archivos estáticos pesados o temporales de prueba
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.mp4
+*.zip
+
+# Archivos de entorno y configuración local
+.env
+.env.local
+.DS_Store
+Thumbs.db

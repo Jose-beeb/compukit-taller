@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#2563eb">
+  <meta name="description" content="Sistema de Gestión de Taller de Reparación de Computadoras - Compukit">
+  <title>Compukit - Gestión de Taller</title>
+  
+  <!-- CSS Principal y Manifest -->
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💻</text></svg>">
+
+  <!-- Librería CDN jsPDF para generación de comprobantes -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- Barra Superior del Encabezado -->
+  <header class="header-bar">
+    <div class="brand-title">
+      <span class="brand-logo">💻</span>
+      <span>Compukit</span>
+    </div>
+    <div class="header-actions">
+      <!-- Selector Visual de Técnico Activo -->
+      <div class="technician-selector-box" title="Técnico que está usando el sistema">
+        <span style="font-size: 1.1rem;">👨‍🔧</span>
+        <select id="active-technician-select" class="technician-select" onchange="window.app && window.app.changeActiveTechnician(this.value)">
+          <!-- Cargados dinámicamente -->
+        </select>
+      </div>
+
+      <div id="sync-status" class="sync-badge" title="Estado de sincronización con Google Sheets">
+        <span class="sync-dot offline" id="sync-dot"></span>
+        <span id="sync-text">Sin URL Sheets</span>
+      </div>
+      <button id="btn-theme-toggle" class="icon-btn" aria-label="Cambiar tema">🌙</button>
+    </div>
+  </header>
+
+  <!-- Contenedor Principal de Vistas -->
+  <main class="app-container">
+
+    <!-- VISTA 1: NUEVO INGRESO (WIZARD PASO A PASO) -->
+    <section id="view-ingreso" class="view-section active">
+      <div class="section-header">
+        <h1 class="section-title">➕ Registrar Nuevo Equipo</h1>
+        <p class="section-subtitle">Ingresa los datos del cliente y del equipo paso a paso.</p>
+      </div>
+
+      <div class="wizard-card">
+        <!-- Indicador de Pasos -->
+        <div class="wizard-steps-indicator">
+          <div class="step-bubble active" id="step-bubble-1">1</div>
+          <div class="step-bubble" id="step-bubble-2">2</div>
+          <div class="step-bubble" id="step-bubble-3">3</div>
+          <div class="step-bubble" id="step-bubble-4">4</div>
+        </div>
+
+        <form id="form-ingreso" onsubmit="return false;">
+          
+          <!-- PASO 1: DATOS DEL CLIENTE -->
+          <div class="wizard-step-content active" id="step-1">
+            <h2 style="font-size: 1.3rem; margin-bottom: 16px;">👤 Paso 1: Datos del Cliente</h2>
+            
+            <div class="form-group">
+              <label class="form-label" for="client-name">Nombre y Apellido del Cliente <span class="required">*</span></label>
+              <input type="text" id="client-name" class="form-control" placeholder="Ej: Juan Pérez" required autocomplete="off">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="client-phone">Número de Teléfono Celular <span class="required">*</span></label>
+              <input type="tel" id="client-phone" class="form-control" placeholder="Ej: 0991234567" required autocomplete="off">
+            </div>
+
+            <div class="btn-group">
+              <button type="button" class="btn btn-primary" onclick="window.app && window.app.nextStep(2)">Siguiente: Datos del Equipo ➡️</button>
+            </div>
+          </div>
+
+          <!-- PASO 2: TIPO DE EQUIPO Y ACCESORIOS -->
+          <div class="wizard-step-content" id="step-2">
+            <h2 style="font-size: 1.3rem; margin-bottom: 16px;">💻 Paso 2: Equipo y Accesorios</h2>
+
+            <div class="form-group">
+              <label class="form-label">Tipo de Equipo</label>
+              <div class="chip-grid" id="equipment-type-chips">
+                <label class="chip-option selected">
+                  <input type="radio" name="eq-type" value="Laptop / Portátil" checked> 💻 Laptop
+                </label>
+                <label class="chip-option">
+                  <input type="radio" name="eq-type" value="PC de Escritorio"> 🖥️ PC Escritorio
+                </label>
+                <label class="chip-option">
+                  <input type="radio" name="eq-type" value="Impresora"> 🖨️ Impresora
+                </label>
+                <label class="chip-option">
+                  <input type="radio" name="eq-type" value="Monitor / Pantalla"> 🖥️ Monitor
+                </label>
+                <label class="chip-option">
+                  <input type="radio" name="eq-type" value="Otro Dispositivo"> 🔌 Otro
+                </label>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="brand-model">Marca y Modelo</label>
+              <input type="text" id="brand-model" class="form-control" placeholder="Ej: HP Pavilion / Dell Inspiron 15">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Accesorios Recibidos</label>
+              <div class="chip-grid" id="accessories-chips">
+                <button type="button" class="chip-option" onclick="window.app && window.app.toggleAccessoryChip(this, 'Cargador/Adaptador')">🔌 Cargador</button>
+                <button type="button" class="chip-option" onclick="window.app && window.app.toggleAccessoryChip(this, 'Cable de Poder')">⚡ Cable Poder</button>
+                <button type="button" class="chip-option" onclick="window.app && window.app.toggleAccessoryChip(this, 'Funda/Maletín')">🎒 Funda/Maletín</button>
+                <button type="button" class="chip-option" onclick="window.app && window.app.toggleAccessoryChip(this, 'Mouse/Ratón')">🖱️ Mouse</button>
+                <button type="button" class="chip-option" onclick="window.app && window.app.toggleAccessoryChip(this, 'Otro')">📦 Otro (Cartón, etc.)</button>
+                <button type="button" class="chip-option" onclick="window.app && window.app.toggleAccessoryChip(this, 'Sin Accesorios')">🚫 Ninguno</button>
+              </div>
+
+              <!-- Campo que aparece al marcar "Otro" -->
+              <div id="other-accessory-container" style="display: none; margin-top: 12px;">
+                <label class="form-label" for="other-accessory-input" style="font-size: 0.95rem;">¿Qué otro accesorio o empaque se recibió?</label>
+                <input type="text" id="other-accessory-input" class="form-control" placeholder="Ej: Caja de cartón, adaptador HDMI, memoria USB...">
+              </div>
+            </div>
+
+            <div class="btn-group">
+              <button type="button" class="btn btn-secondary" onclick="window.app && window.app.nextStep(1)">⬅️ Volver</button>
+              <button type="button" class="btn btn-primary" onclick="window.app && window.app.nextStep(3)">Siguiente: Diagnóstico ➡️</button>
+            </div>
+          </div>
+
+          <!-- PASO 3: DIAGNÓSTICO, VOZ Y FOTO -->
+          <div class="wizard-step-content" id="step-3">
+            <h2 style="font-size: 1.3rem; margin-bottom: 16px;">🔍 Paso 3: Falla / Diagnóstico</h2>
+
+            <div class="form-group">
+              <label class="form-label" for="issue-description">¿Qué problema presenta el equipo?</label>
+              <textarea id="issue-description" class="form-control" placeholder="Escribe aquí o usa el botón de micrófono abajo para dictar..."></textarea>
+            </div>
+
+            <!-- Botón Grande de Dictado por Voz -->
+            <div class="voice-dictate-box">
+              <button type="button" id="btn-voice-dictate" class="btn-mic" title="Presiona para dictar por voz">🎙️</button>
+              <div id="voice-status" style="font-size: 0.95rem; font-weight: 700; color: var(--primary);">Presiona el micrófono para hablar</div>
+            </div>
+
+            <!-- Captura de Foto opcional -->
+            <div class="form-group" style="margin-top: 20px;">
+              <label class="form-label">Foto del Equipo / Estado (Opcional)</label>
+              <div class="photo-uploader">
+                <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none;" onchange="window.app && window.app.handlePhotoSelect(event)">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('photo-input').click()">📸 Tomar Foto con Celular</button>
+                <div id="photo-preview" class="photo-preview-container" style="display:none;">
+                  <img id="img-preview" src="" alt="Vista previa foto">
+                </div>
+              </div>
+            </div>
+
+            <div class="btn-group">
+              <button type="button" class="btn btn-secondary" onclick="window.app && window.app.nextStep(2)">⬅️ Volver</button>
+              <button type="button" class="btn btn-primary" onclick="window.app && window.app.nextStep(4)">Siguiente: Costos ➡️</button>
+            </div>
+          </div>
+
+          <!-- PASO 4: COSTO ESTIMADO Y REGISTRO FINAL -->
+          <div class="wizard-step-content" id="step-4">
+            <h2 style="font-size: 1.3rem; margin-bottom: 16px;">💵 Paso 4: Costos y Registro</h2>
+
+            <div class="form-group">
+              <label class="form-label" for="cost-estimate">Costo Estimado ($) <span style="font-size:0.85rem; font-weight:normal; color:var(--text-muted);">(Deja en 0.00 si está por diagnosticar)</span></label>
+              <input type="number" step="0.01" id="cost-estimate" class="form-control" placeholder="0.00" value="0.00" style="font-size: 1.4rem; font-weight: 800;">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="cost-advance">Abono Inicial ($)</label>
+              <input type="number" step="0.01" id="cost-advance" class="form-control" placeholder="0.00" value="0.00">
+            </div>
+
+            <div style="background-color: var(--bg-secondary); padding: 14px; border-radius: var(--radius-md); margin-bottom: 20px; font-size: 0.95rem;">
+              <strong>📋 Resumen del Registro:</strong>
+              <div id="summary-preview" style="margin-top: 6px; line-height: 1.4;"></div>
+            </div>
+
+            <div class="btn-group">
+              <button type="button" class="btn btn-secondary" onclick="window.app && window.app.nextStep(3)">⬅️ Volver</button>
+              <button type="button" class="btn btn-success" id="btn-save-record" onclick="window.app && window.app.submitNewRecord()">✅ GUARDAR EQUIPO</button>
+            </div>
+          </div>
+
+        </form>
+      </div>
+    </section>
+
+    <!-- VISTA 2: EQUIPOS EN TALLER -->
+    <section id="view-taller" class="view-section">
+      <div class="section-header">
+        <h1 class="section-title">🛠️ Equipos en Taller</h1>
+        <p class="section-subtitle">Consulta y actualiza el avance de las reparaciones.</p>
+      </div>
+
+      <!-- Buscador -->
+      <div class="search-filter-bar">
+        <input type="text" id="search-input" class="form-control" placeholder="🔍 Buscar cliente, teléfono o marca..." onkeyup="window.app && window.app.filterRecords()">
+      </div>
+
+      <!-- Filtros Rápidos de Estado -->
+      <div class="chip-grid" style="margin-bottom: 16px;">
+        <button class="chip-option selected" onclick="window.app && window.app.setFilterStatus('TODOS', this)">Todos</button>
+        <button class="chip-option" onclick="window.app && window.app.setFilterStatus('EN_TALLER', this)">En Taller 🟡🔵</button>
+        <button class="chip-option" onclick="window.app && window.app.setFilterStatus('Esperando Aprobación', this)">Por Cotizar/Aprobar 🟣</button>
+        <button class="chip-option" onclick="window.app && window.app.setFilterStatus('Listo', this)">Listos 🟢</button>
+        <button class="chip-option" onclick="window.app && window.app.setFilterStatus('Entregado', this)">Entregados ⚪</button>
+      </div>
+
+      <!-- Lista de Tarjetas de Equipos -->
+      <div id="equipment-list" class="equipment-list">
+        <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+          Cargando registro de equipos...
+        </div>
+      </div>
+    </section>
+
+    <!-- VISTA 3: REPORTES E INGRESOS -->
+    <section id="view-reportes" class="view-section">
+      <div class="section-header">
+        <h1 class="section-title">📊 Ingresos y Resumen</h1>
+        <p class="section-subtitle">Métricas rápidas del taller y saldo pendiente.</p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-val" id="stat-total-money">$0.00</div>
+          <div class="stat-label">Total Cobrado</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-active-equip">0</div>
+          <div class="stat-label">Equipos en Taller</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-ready-equip">0</div>
+          <div class="stat-label">Listos p/ Entregar</div>
+        </div>
+      </div>
+
+      <div class="wizard-card">
+        <h3 style="margin-bottom: 12px;">📈 Últimos Trabajos Entregados</h3>
+        <div id="recent-delivered-list"></div>
+      </div>
+    </section>
+
+    <!-- VISTA 4: CONFIGURACIÓN Y SERVICIOS -->
+    <section id="view-config" class="view-section">
+      <div class="section-header">
+        <h1 class="section-title">⚙️ Servicios y Configuración</h1>
+        <p class="section-subtitle">Personaliza los servicios que ofrece tu taller y la conexión a Google Sheets.</p>
+      </div>
+
+      <!-- GESTIÓN DE SERVICIOS Y TIPOS DE EQUIPOS -->
+      <div class="wizard-card" style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 8px;">🛠️ Servicios y Equipos Editables</h3>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 14px;">
+          Agrega o elimina servicios rápidos (ej: Impresión de Planos, Mantenimiento, etc.). Aparecerán como botones rápidos en el registro.
+        </p>
+
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <input type="text" id="new-service-input" class="form-control" placeholder="Ej: Impresión de Planos / Mantenimiento...">
+          <button class="btn btn-primary" style="min-width: 130px;" onclick="window.app && window.app.addCustomService()">➕ Agregar</button>
+        </div>
+
+        <div id="custom-services-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <!-- Se cargan dinámicamente -->
+        </div>
+      </div>
+
+      <!-- GESTIÓN DE TÉCNICOS DEL TALLER -->
+      <div class="wizard-card" style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 8px;">👨‍🔧 Técnicos y Personal del Taller</h3>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 14px;">
+          Define los nombres de los técnicos. Permite registrar quién recibió el equipo o realizó la reparación.
+        </p>
+
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <input type="text" id="new-technician-input" class="form-control" placeholder="Ej: Carlos / Nancy / Luis...">
+          <button class="btn btn-primary" style="min-width: 130px;" onclick="window.app && window.app.addTechnician()">➕ Agregar</button>
+        </div>
+
+        <div id="technicians-list" style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <!-- Se cargan dinámicamente -->
+        </div>
+      </div>
+
+      <div class="wizard-card" style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 8px;">📊 Conexión Google Sheets</h3>
+        <div class="form-group">
+          <label class="form-label" for="sheets-url-input">URL de la Web App (Google Apps Script)</label>
+          <input type="url" id="sheets-url-input" class="form-control" placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="window.app && window.app.saveSheetsUrl()">💾 Guardar y Probar Conexión</button>
+        </div>
+
+        <div id="config-test-result" style="margin-top: 16px; font-weight: bold;"></div>
+      </div>
+
+      <div class="wizard-card">
+        <h3>❓ ¿Cómo obtener la URL de Google Sheets?</h3>
+        <ol style="margin-left: 20px; margin-top: 10px; line-height: 1.6;">
+          <li>Abre tu Hoja de Cálculo en Google Drive.</li>
+          <li>Ve al menú <strong>Extensiones ➔ Apps Script</strong>.</li>
+          <li>Pega el código provisto en la carpeta <code>google-apps-script/Code.gs</code>.</li>
+          <li>Haz clic en <strong>Desplegar ➔ Nuevo despliegue</strong> como Aplicación Web (Acceso: Cualquier persona).</li>
+          <li>Copia la URL obtenida y pégala arriba.</li>
+        </ol>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: ACTUALIZAR ESTADO Y TRABAJO REALIZADO -->
+  <div id="modal-status" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">📝 Actualizar Equipo</h3>
+        <button class="icon-btn" onclick="app.closeModal('modal-status')">✖️</button>
+      </div>
+      <form id="form-update-status" onsubmit="return false;">
+        <input type="hidden" id="update-order-id">
+
+        <div class="form-group">
+          <label class="form-label">Estado Actual</label>
+          <select id="update-status-select" class="form-control" style="font-size: 1.15rem; font-weight: 700;">
+            <option value="Recibido">🟡 Recibido (En Espera de Revisión)</option>
+            <option value="En Diagnóstico">🔵 En Diagnóstico / Revisión Técnica</option>
+            <option value="Esperando Aprobación">🟣 Diagnóstico Listo (Esperando Aprobación de Cliente)</option>
+            <option value="En Reparación">🟠 En Reparación / Esperando Repuestos</option>
+            <option value="Listo">🟢 Listo para Entregar</option>
+            <option value="Entregado">⚪ Entregado al Cliente</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="update-issue-description">🔍 Diagnóstico / Falla Encontrada</label>
+          <textarea id="update-issue-description" class="form-control" placeholder="Describe la falla confirmada tras el diagnóstico..."></textarea>
+          <button type="button" class="btn btn-secondary btn-sm" style="margin-top: 6px;" onclick="window.app && window.app.startVoiceDictation('update-issue-description')">🎙️ Dictar Diagnóstico</button>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="update-work-done">🛠️ Trabajo / Repuestos a Realizar</label>
+          <textarea id="update-work-done" class="form-control" placeholder="Ej: Cambio de pantalla, reparación de placa, mantenimiento..."></textarea>
+          <button type="button" class="btn btn-secondary btn-sm" style="margin-top: 6px;" onclick="window.app && window.app.startVoiceDictation('update-work-done')">🎙️ Dictar Trabajo</button>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="update-total-cost">Costo Total ($)</label>
+          <input type="number" step="0.01" id="update-total-cost" class="form-control" placeholder="0.00" style="font-size: 1.25rem; font-weight: 800;">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="update-advance-cost">Abono Entregado ($)</label>
+          <input type="number" step="0.01" id="update-advance-cost" class="form-control" placeholder="0.00" style="font-size: 1.25rem; font-weight: 800;">
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-secondary" onclick="window.app && window.app.closeModal('modal-status')">Cancelar</button>
+          <button class="btn btn-success" onclick="window.app && window.app.saveStatusUpdate()">💾 Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: TICKET Y VISTA PREVIA IMPRESIÓN -->
+  <div id="modal-ticket" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">📄 Comprobante de Recepción</h3>
+        <button class="icon-btn" onclick="window.app && window.app.closeModal('modal-ticket')">✖️</button>
+      </div>
+
+      <div id="printable-ticket" class="ticket-container">
+        <div class="ticket-header">
+          <h2>COMPUKIT</h2>
+          <p>Taller de Reparación y Mantenimiento</p>
+          <p id="ticket-date" style="font-size: 0.85rem;"></p>
+        </div>
+
+        <div class="ticket-row"><strong>N° Orden:</strong> <span id="ticket-id"></span></div>
+        <div class="ticket-row"><strong>Cliente:</strong> <span id="ticket-client"></span></div>
+        <div class="ticket-row"><strong>Teléfono:</strong> <span id="ticket-phone"></span></div>
+        <div class="ticket-row"><strong>Equipo:</strong> <span id="ticket-equipment"></span></div>
+        <div class="ticket-row"><strong>Accesorios:</strong> <span id="ticket-acc"></span></div>
+        <div style="margin-top: 8px;">
+          <strong>Falla Reportada:</strong>
+          <p id="ticket-issue" style="margin-top: 4px; font-style: italic;"></p>
+        </div>
+        <div class="ticket-total ticket-row">
+          <span>Total Est.:</span>
+          <span id="ticket-cost">$0.00</span>
+        </div>
+      </div>
+
+      <div class="btn-group" style="margin-top: 16px;">
+        <button class="btn btn-secondary" onclick="window.print()">🖨️ Imprimir Ticket</button>
+        <button class="btn btn-primary" onclick="window.app && window.app.downloadPDFTicket()">📥 Descargar PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barra de Navegación Inferior (Fija en Móvil) -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" onclick="window.app && window.app.switchView('view-ingreso', this)">
+      <span class="nav-icon">➕</span>
+      <span>Ingreso</span>
+    </button>
+    <button class="nav-item" onclick="window.app && window.app.switchView('view-taller', this)">
+      <span class="nav-icon">🛠️</span>
+      <span>Taller</span>
+    </button>
+    <button class="nav-item" onclick="window.app && window.app.switchView('view-reportes', this)">
+      <span class="nav-icon">📊</span>
+      <span>Reporte</span>
+    </button>
+    <button class="nav-item" onclick="window.app && window.app.switchView('view-config', this)">
+      <span class="nav-icon">⚙️</span>
+      <span>Config</span>
+    </button>
+  </nav>
+
+  <!-- JS Principal -->
+  <script src="app.js"></script>
+</body>
+</html>

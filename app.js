@@ -1,0 +1,1020 @@
+/**
+ * Compukit - Lógica de la Aplicación Móvil
+ * Integración con Google Apps Script (Drive + Sheets), Cola Offline resiliente,
+ * Compresión de fotos en Canvas (máx 1024px, JPEG 0.7), Dictado por Voz y WhatsApp.
+ */
+
+class CompukitApp {
+  constructor() {
+    this.currentStep = 1;
+    this.sheetsUrl = localStorage.getItem("compukit_sheets_url") || "";
+    this.orders = JSON.parse(localStorage.getItem("compukit_orders") || "[]");
+    this.cashFlow = JSON.parse(localStorage.getItem("compukit_cashflow") || "[]");
+    this.syncQueue = JSON.parse(localStorage.getItem("compukit_sync_queue") || "[]");
+    
+    const defaultServices = [
+      "💻 Laptop / Portátil",
+      "🖥️ PC de Escritorio",
+      "🖨️ Impresora",
+      "📐 Impresión de Planos",
+      "🖥️ Monitor / Pantalla",
+      "🔌 Otro Servicio / Dispositivo"
+    ];
+    const defaultTechnicians = ["Principal", "Técnico 1", "Técnico 2"];
+    this.technicians = JSON.parse(localStorage.getItem("compukit_technicians") || JSON.stringify(defaultTechnicians));
+    this.activeTechnician = localStorage.getItem("compukit_active_tech") || this.technicians[0];
+
+    this.selectedPhotoBase64 = "";
+    this.activeFilter = "TODOS";
+    this.speechRecognition = null;
+    this.isRecording = false;
+
+    this.init();
+  }
+
+  init() {
+    this.setupTheme();
+    this.setupNavigation();
+    this.renderTechnicianSelector();
+    this.renderTechniciansManager();
+    this.renderServiceChips();
+    this.renderCustomServicesManager();
+    this.setupChipHandlers();
+    this.setupVoiceDictation();
+    this.updateSyncBadge();
+
+    // Cargar URL configurada si existe
+    if (this.sheetsUrl) {
+      const urlInput = document.getElementById("sheets-url-input");
+      if (urlInput) urlInput.value = this.sheetsUrl;
+      this.fetchFromSheets();
+    } else {
+      this.renderEquipmentList();
+      this.renderStats();
+    }
+
+    // Procesar cola offline en segundo plano
+    this.processSyncQueue();
+    window.addEventListener("online", () => this.processSyncQueue());
+
+    // Registrar Service Worker para PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(err => {
+        console.warn("Service worker no registrado:", err);
+      });
+    }
+  }
+
+  /* ==========================================
+     GESTIÓN DE TÉCNICOS DEL TALLER
+     ========================================== */
+  renderTechnicianSelector() {
+    const select = document.getElementById("active-technician-select");
+    if (!select) return;
+
+    select.innerHTML = this.technicians.map(tech => `
+      <option value="${this.escapeHTML(tech)}" ${tech === this.activeTechnician ? 'selected' : ''}>
+        ${this.escapeHTML(tech)}
+      </option>
+    `).join("");
+  }
+
+  changeActiveTechnician(techName) {
+    this.activeTechnician = techName;
+    localStorage.setItem("compukit_active_tech", techName);
+  }
+
+  renderTechniciansManager() {
+    const container = document.getElementById("technicians-list");
+    if (!container) return;
+
+    container.innerHTML = this.technicians.map((tech, index) => `
+      <div style="display: inline-flex; align-items: center; gap: 6px; background-color: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 12px; font-weight: bold; font-size: 0.95rem;">
+        <span>👤 ${this.escapeHTML(tech)}</span>
+        <button type="button" onclick="window.app && window.app.deleteTechnician(${index})" style="background: none; border: none; cursor: pointer; font-size: 1rem; color: var(--danger); margin-left: 4px;" title="Eliminar técnico">❌</button>
+      </div>
+    `).join("");
+  }
+
+  addTechnician() {
+    const input = document.getElementById("new-technician-input");
+    if (!input) return;
+    const val = input.value.trim();
+    if (!val) {
+      alert("Por favor escribe el nombre del técnico.");
+      return;
+    }
+
+    if (this.technicians.includes(val)) {
+      alert("Este técnico ya se encuentra registrado.");
+      return;
+    }
+
+    this.technicians.push(val);
+    localStorage.setItem("compukit_technicians", JSON.stringify(this.technicians));
+    input.value = "";
+    this.renderTechnicianSelector();
+    this.renderTechniciansManager();
+    alert(`✅ Técnico añadido: "${val}"`);
+  }
+
+  deleteTechnician(index) {
+    if (this.technicians.length <= 1) {
+      alert("Debes mantener al menos un técnico registrado.");
+      return;
+    }
+    const removed = this.technicians.splice(index, 1);
+    if (this.activeTechnician === removed[0]) {
+      this.activeTechnician = this.technicians[0];
+      localStorage.setItem("compukit_active_tech", this.activeTechnician);
+    }
+    localStorage.setItem("compukit_technicians", JSON.stringify(this.technicians));
+    this.renderTechnicianSelector();
+    this.renderTechniciansManager();
+  }
+
+  /* ==========================================
+     SERVICIOS EDITABLES (PLANOS, MANTENIMIENTO, ETC)
+     ========================================== */
+  renderServiceChips() {
+    const container = document.getElementById("equipment-type-chips");
+    if (!container) return;
+
+    container.innerHTML = this.services.map((svc, index) => {
+      const isSelected = index === 0;
+      return `
+        <label class="chip-option ${isSelected ? 'selected' : ''}">
+          <input type="radio" name="eq-type" value="${this.escapeHTML(svc)}" ${isSelected ? 'checked' : ''}>
+          ${this.escapeHTML(svc)}
+        </label>
+      `;
+    }).join("");
+
+    this.bindEquipmentChipEvents();
+  }
+
+  bindEquipmentChipEvents() {
+    document.querySelectorAll('#equipment-type-chips .chip-option').forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll('#equipment-type-chips .chip-option').forEach(c => c.classList.remove('selected'));
+        chip.classList.add('selected');
+        const radio = chip.querySelector('input[type="radio"]');
+        if (radio) radio.checked = true;
+      });
+    });
+  }
+
+  renderCustomServicesManager() {
+    const container = document.getElementById("custom-services-list");
+    if (!container) return;
+
+    container.innerHTML = this.services.map((svc, index) => `
+      <div style="display: inline-flex; align-items: center; gap: 6px; background-color: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: var(--radius-md); padding: 8px 12px; font-weight: bold; font-size: 0.95rem;">
+        <span>${this.escapeHTML(svc)}</span>
+        <button type="button" onclick="window.app && window.app.deleteCustomService(${index})" style="background: none; border: none; cursor: pointer; font-size: 1rem; color: var(--danger); margin-left: 4px;" title="Eliminar servicio">❌</button>
+      </div>
+    `).join("");
+  }
+
+  addCustomService() {
+    const input = document.getElementById("new-service-input");
+    if (!input) return;
+    const val = input.value.trim();
+    if (!val) {
+      alert("Por favor escribe el nombre del servicio o tipo de equipo.");
+      return;
+    }
+
+    if (this.services.includes(val)) {
+      alert("Este servicio ya se encuentra en la lista.");
+      return;
+    }
+
+    this.services.push(val);
+    localStorage.setItem("compukit_services", JSON.stringify(this.services));
+    input.value = "";
+    this.renderServiceChips();
+    this.renderCustomServicesManager();
+    alert(`✅ Servicio añadido: "${val}"`);
+  }
+
+  deleteCustomService(index) {
+    if (this.services.length <= 1) {
+      alert("Debes mantener al menos un servicio registrado.");
+      return;
+    }
+    const removed = this.services.splice(index, 1);
+    localStorage.setItem("compukit_services", JSON.stringify(this.services));
+    this.renderServiceChips();
+    this.renderCustomServicesManager();
+  }
+
+  /* ==========================================
+     MANEJO DE TEMA Y NAVEGACIÓN
+     ========================================== */
+  setupTheme() {
+    const savedTheme = localStorage.getItem("compukit_theme") || "light";
+    document.documentElement.setAttribute("data-theme", savedTheme);
+    const themeBtn = document.getElementById("btn-theme-toggle");
+    if (themeBtn) {
+      themeBtn.textContent = savedTheme === "dark" ? "☀️" : "🌙";
+      themeBtn.onclick = () => {
+        const current = document.documentElement.getAttribute("data-theme");
+        const next = current === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", next);
+        localStorage.setItem("compukit_theme", next);
+        themeBtn.textContent = next === "dark" ? "☀️" : "🌙";
+      };
+    }
+  }
+
+  setupNavigation() {
+    // Escucha cambios de vista
+  }
+
+  switchView(viewId, targetBtn) {
+    document.querySelectorAll(".view-section").forEach(sec => sec.classList.remove("active"));
+    const selectedView = document.getElementById(viewId);
+    if (selectedView) selectedView.classList.add("active");
+
+    if (targetBtn) {
+      document.querySelectorAll(".nav-item").forEach(btn => btn.classList.remove("active"));
+      targetBtn.classList.add("active");
+    }
+
+    if (viewId === 'view-taller') {
+      this.renderEquipmentList();
+    } else if (viewId === 'view-reportes') {
+      this.renderStats();
+    } else if (viewId === 'view-config') {
+      this.renderTechniciansManager();
+      this.renderCustomServicesManager();
+    }
+  }
+
+  toggleAccessoryChip(btn, accessoryName) {
+    if (!btn) return;
+    
+    // Si selecciona "Sin Accesorios", deseleccionar los demás y ocultar input de "Otro"
+    if (accessoryName === 'Sin Accesorios' || (btn.textContent && btn.textContent.includes('Ninguno'))) {
+      const isSelected = btn.classList.contains('selected');
+      document.querySelectorAll('#accessories-chips .chip-option').forEach(b => b.classList.remove('selected'));
+      if (!isSelected) {
+        btn.classList.add('selected');
+      }
+      const otherContainer = document.getElementById("other-accessory-container");
+      if (otherContainer) otherContainer.style.display = "none";
+    } else {
+      // Si selecciona otro accesorio, quitar "Sin Accesorios"
+      document.querySelectorAll('#accessories-chips .chip-option').forEach(b => {
+        if (b.textContent.includes('Ninguno') || b.textContent.includes('Sin Accesorios')) {
+          b.classList.remove('selected');
+        }
+      });
+      btn.classList.toggle('selected');
+
+      // Si es el botón de "Otro", mostrar u ocultar el campo de texto
+      if (accessoryName === 'Otro' || (btn.textContent && btn.textContent.includes('Otro'))) {
+        const otherContainer = document.getElementById("other-accessory-container");
+        if (otherContainer) {
+          otherContainer.style.display = btn.classList.contains('selected') ? "block" : "none";
+          if (btn.classList.contains('selected')) {
+            document.getElementById("other-accessory-input")?.focus();
+          }
+        }
+      }
+    }
+  }
+
+  setupChipHandlers() {
+    const chips = document.querySelectorAll('#accessories-chips .chip-option');
+    chips.forEach(chip => {
+      chip.onclick = (e) => {
+        if (e) e.preventDefault();
+        const text = chip.textContent.trim();
+        this.toggleAccessoryChip(chip, text);
+      };
+    });
+  }
+
+  /* ==========================================
+     FORMULARIO GUIADO (WIZARD DE INGRESO)
+     ========================================== */
+  nextStep(targetStep) {
+    if (targetStep > this.currentStep) {
+      if (this.currentStep === 1) {
+        const name = document.getElementById("client-name").value.trim();
+        const phone = document.getElementById("client-phone").value.trim();
+        if (!name || !phone) {
+          alert("⚠️ Por favor ingresa el Nombre y el Teléfono del cliente.");
+          return;
+        }
+      }
+    }
+
+    document.querySelectorAll(".wizard-step-content").forEach(el => el.classList.remove("active"));
+    const nextStepEl = document.getElementById(`step-${targetStep}`);
+    if (nextStepEl) nextStepEl.classList.add("active");
+
+    for (let i = 1; i <= 4; i++) {
+      const bubble = document.getElementById(`step-bubble-${i}`);
+      if (bubble) {
+        bubble.classList.remove("active", "completed");
+        if (i < targetStep) bubble.classList.add("completed");
+        if (i === targetStep) bubble.classList.add("active");
+      }
+    }
+
+    this.currentStep = targetStep;
+
+    if (targetStep === 4) {
+      this.updateSummaryPreview();
+    }
+  }
+
+  updateSummaryPreview() {
+    const name = document.getElementById("client-name").value;
+    const phone = document.getElementById("client-phone").value;
+    const eqType = document.querySelector('input[name="eq-type"]:checked')?.value || "Laptop";
+    const brand = document.getElementById("brand-model").value || "Sin especificar";
+    const acc = this.getSelectedAccessories().join(", ") || "Ninguno";
+    const issue = document.getElementById("issue-description").value || "Por diagnosticar";
+
+    const previewEl = document.getElementById("summary-preview");
+    if (previewEl) {
+      previewEl.innerHTML = `
+        <strong>Cliente:</strong> ${this.escapeHTML(name)} (${this.escapeHTML(phone)})<br>
+        <strong>Equipo:</strong> ${this.escapeHTML(eqType)} - ${this.escapeHTML(brand)}<br>
+        <strong>Accesorios:</strong> ${this.escapeHTML(acc)}<br>
+        <strong>Falla:</strong> ${this.escapeHTML(issue)}
+      `;
+    }
+  }
+
+  getSelectedAccessories() {
+    const list = [];
+    document.querySelectorAll('#accessories-chips .chip-option.selected').forEach(btn => {
+      const text = btn.textContent.trim();
+      if (text.includes("Otro")) {
+        const otherVal = document.getElementById("other-accessory-input")?.value.trim();
+        list.push(otherVal ? `Otro (${otherVal})` : "Otro");
+      } else {
+        list.push(text);
+      }
+    });
+    return list;
+  }
+
+  /* ==========================================
+     DICTADO POR VOZ (SPEECH-TO-TEXT)
+     ========================================== */
+  setupVoiceDictation() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const micBtn = document.getElementById("btn-voice-dictate");
+    const voiceStatus = document.getElementById("voice-status");
+
+    if (!SpeechRecognition) {
+      if (voiceStatus) voiceStatus.textContent = "Dictado por voz no disponible en este navegador. Puedes escribir con el teclado.";
+      return;
+    }
+
+    this.speechRecognition = new SpeechRecognition();
+    this.speechRecognition.lang = 'es-ES';
+    this.speechRecognition.continuous = false;
+    this.speechRecognition.interimResults = false;
+
+    this.speechRecognition.onstart = () => {
+      this.isRecording = true;
+      if (micBtn) micBtn.classList.add("recording");
+      if (voiceStatus) voiceStatus.textContent = "🎙️ Escuchando... Habla ahora claramente";
+    };
+
+    this.speechRecognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      const textarea = document.getElementById("issue-description");
+      if (textarea) {
+        textarea.value = textarea.value ? textarea.value + " " + transcript : transcript;
+      }
+      if (voiceStatus) voiceStatus.textContent = "✅ Grabado con éxito";
+    };
+
+    this.speechRecognition.onerror = (event) => {
+      console.warn("Error voz:", event.error);
+      if (voiceStatus) voiceStatus.textContent = "⚠️ No se pudo escuchar. Vuelve a presionar el micrófono.";
+    };
+
+    this.speechRecognition.onend = () => {
+      this.isRecording = false;
+      if (micBtn) micBtn.classList.remove("recording");
+    };
+
+    if (micBtn) {
+      micBtn.onclick = () => {
+        if (this.isRecording) {
+          this.speechRecognition.stop();
+        } else {
+          this.speechRecognition.start();
+        }
+      };
+    }
+  }
+
+  startVoiceDictation(targetTextareaId) {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Dictado por voz no soportado.");
+      return;
+    }
+
+    const rec = new SpeechRecognition();
+    rec.lang = 'es-ES';
+    rec.start();
+
+    rec.onresult = (e) => {
+      const text = e.results[0][0].transcript;
+      const area = document.getElementById(targetTextareaId);
+      if (area) area.value = area.value ? area.value + " " + text : text;
+    };
+  }
+
+  /* ==========================================
+     COMPRESIÓN DE FOTOGRAFÍAS (CANVAS 1024px JPEG 0.7)
+     ========================================== */
+  handlePhotoSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target.result;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        const maxDim = 1024; // Máximo 1024px para no saturar datos móviles
+        let w = img.width;
+        let h = img.height;
+
+        if (w > h && w > maxDim) {
+          h = Math.round((h * maxDim) / w);
+          w = maxDim;
+        } else if (h > maxDim) {
+          w = Math.round((w * maxDim) / h);
+          h = maxDim;
+        }
+
+        canvas.width = w;
+        canvas.height = h;
+        ctx.drawImage(img, 0, 0, w, h);
+
+        // Comprimir en JPEG calidad 0.7
+        this.selectedPhotoBase64 = canvas.toDataURL("image/jpeg", 0.7);
+        const previewImg = document.getElementById("img-preview");
+        const previewContainer = document.getElementById("photo-preview");
+        if (previewImg && previewContainer) {
+          previewImg.src = this.selectedPhotoBase64;
+          previewContainer.style.display = "flex";
+        }
+      };
+    };
+    reader.readAsDataURL(file);
+  }
+
+  /* ==========================================
+     REGISTRO Y COLA OFFLINE
+     ========================================== */
+  async submitNewRecord() {
+    const name = document.getElementById("client-name").value.trim();
+    const phone = document.getElementById("client-phone").value.trim();
+    const eqType = document.querySelector('input[name="eq-type"]:checked')?.value || "Laptop / Portátil";
+    const brand = document.getElementById("brand-model").value.trim() || "Genérico";
+    const accessories = this.getSelectedAccessories().join(", ") || "Ninguno";
+    const issue = document.getElementById("issue-description").value.trim() || "Sin descripción";
+    const cost = parseFloat(document.getElementById("cost-estimate").value) || 0;
+    const advance = parseFloat(document.getElementById("cost-advance").value) || 0;
+
+    if (!name || !phone) {
+      alert("⚠️ El nombre y el teléfono son requeridos.");
+      this.nextStep(1);
+      return;
+    }
+
+    const orderId = "CK-" + Math.floor(100000 + Math.random() * 900000);
+    const nowStr = new Date().toLocaleString("es-ES");
+
+    const orderObj = {
+      "action": "create",
+      "ID_Orden": orderId,
+      "Fecha_Ingreso": nowStr,
+      "Cliente": name,
+      "Telefono": phone,
+      "Tipo_Equipo": eqType,
+      "Marca_Modelo": brand,
+      "Accesorios": accessories,
+      "Falla_Reportada": issue,
+      "Fotos_Drive_URL": "",
+      "Foto_Base64": this.selectedPhotoBase64, // Se procesará y subirá a Drive
+      "Estado": "Recibido",
+      "Trabajo_Realizado": "",
+      "Tecnico_Responsable": this.activeTechnician || "Principal",
+      "Costo_Total": cost,
+      "Abono": advance,
+      "Saldo_Pendiente": cost - advance,
+      "Fecha_Entrega": "",
+      "Metodo_Pago": "Efectivo",
+      "_sync_status": "Pendiente" // Estado offline inicial
+    };
+
+    // 1. Guardar de inmediato localmente
+    this.orders.unshift(orderObj);
+    this.saveOrdersLocal();
+
+    // 2. Encolar para sincronización
+    this.queueSync(orderObj);
+
+    alert(`✅ ¡Equipo registrado!\nN° Orden: ${orderId}\nGuardado localmente y sincronizándose...`);
+
+    // Resetear formulario
+    document.getElementById("form-ingreso").reset();
+    this.selectedPhotoBase64 = "";
+    const previewContainer = document.getElementById("photo-preview");
+    if (previewContainer) previewContainer.style.display = "none";
+    this.nextStep(1);
+
+    // Ir a la pestaña del Taller
+    this.switchView('view-taller', document.querySelectorAll('.nav-item')[1]);
+  }
+
+  saveStatusUpdate() {
+    const orderId = document.getElementById("update-order-id").value;
+    const newStatus = document.getElementById("update-status-select").value;
+    const newIssue = document.getElementById("update-issue-description").value.trim();
+    const workDone = document.getElementById("update-work-done").value.trim();
+    const totalCost = parseFloat(document.getElementById("update-total-cost").value) || 0;
+    const advanceCost = parseFloat(document.getElementById("update-advance-cost")?.value) || 0;
+
+    const order = this.orders.find(o => o.ID_Orden === orderId);
+    if (!order) return;
+
+    const nowStr = new Date().toLocaleString("es-ES");
+    order.Estado = newStatus;
+    if (newIssue) order.Falla_Reportada = newIssue;
+    order.Trabajo_Realizado = workDone;
+    order.Costo_Total = totalCost;
+    order.Abono = advanceCost;
+    order.Saldo_Pendiente = totalCost - advanceCost;
+    order._sync_status = "Pendiente";
+
+    let finalPayment = 0;
+    if (newStatus === "Entregado") {
+      order.Fecha_Entrega = nowStr;
+      finalPayment = order.Saldo_Pendiente > 0 ? order.Saldo_Pendiente : 0;
+    }
+
+    this.saveOrdersLocal();
+
+    const updatePayload = {
+      action: "update_status",
+      ID_Orden: orderId,
+      Cliente: order.Cliente,
+      Estado: newStatus,
+      Falla_Reportada: order.Falla_Reportada,
+      Trabajo_Realizado: workDone,
+      Tecnico_Responsable: this.activeTechnician || "Principal",
+      Costo_Total: totalCost,
+      Abono: advanceCost,
+      Fecha_Entrega: order.Fecha_Entrega || "",
+      Cobro_Final: finalPayment,
+      Metodo_Pago: "Efectivo"
+    };
+
+    this.queueSync(updatePayload);
+
+    this.closeModal("modal-status");
+    this.renderEquipmentList();
+    alert("✅ Diagnóstico, costo y abono actualizados correctamente.");
+  }
+
+  /* ==========================================
+     SINCRONIZACIÓN RESILIENTE CON APPS SCRIPT
+     ========================================== */
+  queueSync(payload) {
+    this.syncQueue.push(payload);
+    this.saveQueueLocal();
+    this.processSyncQueue();
+  }
+
+  async processSyncQueue() {
+    if (!this.sheetsUrl || this.syncQueue.length === 0 || !navigator.onLine) {
+      this.updateSyncBadge();
+      return;
+    }
+
+    this.updateSyncBadge("syncing");
+
+    while (this.syncQueue.length > 0) {
+      const item = this.syncQueue[0];
+      try {
+        // Enviar con text/plain y redirect: "follow" para evitar bloqueo CORS y manejar 302
+        const response = await fetch(this.sheetsUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/plain;charset=utf-8"
+          },
+          body: JSON.stringify(item),
+          redirect: "follow"
+        });
+
+        const result = await response.json();
+        if (result.status === "success") {
+          // Marcar orden local como sincronizada
+          const localOrder = this.orders.find(o => o.ID_Orden === (item.ID_Orden || result.orderId));
+          if (localOrder) {
+            localOrder._sync_status = "Sincronizado";
+            if (result.photoUrl) localOrder.Fotos_Drive_URL = result.photoUrl;
+          }
+          this.syncQueue.shift(); // Quitar de la cola
+          this.saveQueueLocal();
+          this.saveOrdersLocal();
+        } else {
+          console.warn("Respuesta de error en Apps Script:", result);
+          break;
+        }
+      } catch (err) {
+        console.warn("Fallo de red al sincronizar con Apps Script (reintentará luego):", err);
+        break;
+      }
+    }
+
+    this.updateSyncBadge();
+    this.renderEquipmentList();
+    this.renderStats();
+  }
+
+  async fetchFromSheets() {
+    if (!this.sheetsUrl || !navigator.onLine) return;
+    try {
+      this.updateSyncBadge("syncing");
+      const resp = await fetch(`${this.sheetsUrl}?action=read`, { redirect: "follow" });
+      const data = await resp.json();
+
+      if (data.status === "success") {
+        if (Array.isArray(data.orders) && data.orders.length > 0) {
+          // Fusionar con datos locales respetando elementos pendientes de sincronización
+          this.orders = data.orders.reverse().map(o => ({ ...o, _sync_status: "Sincronizado" }));
+          this.saveOrdersLocal();
+        }
+        if (Array.isArray(data.cashFlow)) {
+          this.cashFlow = data.cashFlow;
+          localStorage.setItem("compukit_cashflow", JSON.stringify(this.cashFlow));
+        }
+
+        const resEl = document.getElementById("config-test-result");
+        if (resEl) resEl.innerHTML = `<span style="color: var(--success);">✅ Conexión Exitosa. Sincronizado con Google Sheets & Drive.</span>`;
+        this.renderEquipmentList();
+        this.renderStats();
+      }
+    } catch (err) {
+      console.warn("Error al consultar Google Sheets:", err);
+    } finally {
+      this.updateSyncBadge();
+    }
+  }
+
+  saveSheetsUrl() {
+    const input = document.getElementById("sheets-url-input").value.trim();
+    if (!input) {
+      alert("Ingresa una URL válida de Apps Script.");
+      return;
+    }
+    this.sheetsUrl = input;
+    localStorage.setItem("compukit_sheets_url", input);
+    this.updateSyncBadge();
+    this.fetchFromSheets();
+  }
+
+  updateSyncBadge(customState) {
+    const dot = document.getElementById("sync-dot");
+    const text = document.getElementById("sync-text");
+    if (!dot || !text) return;
+
+    const pendingCount = this.syncQueue.length;
+
+    if (customState === "syncing") {
+      dot.className = "sync-dot offline";
+      text.textContent = "Sincronizando...";
+      return;
+    }
+
+    if (pendingCount > 0) {
+      dot.className = "sync-dot offline";
+      text.textContent = `${pendingCount} pendiente(s)`;
+    } else if (this.sheetsUrl) {
+      dot.className = "sync-dot online";
+      text.textContent = "Google Sheets Conectado";
+    } else {
+      dot.className = "sync-dot offline";
+      text.textContent = "Modo Local";
+    }
+  }
+
+  saveOrdersLocal() {
+    localStorage.setItem("compukit_orders", JSON.stringify(this.orders));
+  }
+
+  saveQueueLocal() {
+    localStorage.setItem("compukit_sync_queue", JSON.stringify(this.syncQueue));
+  }
+
+  /* ==========================================
+     RENDERIZADO Y FILTRADO
+     ========================================== */
+  setFilterStatus(status, chipBtn) {
+    this.activeFilter = status;
+    if (chipBtn) {
+      document.querySelectorAll('#view-taller .chip-option').forEach(c => c.classList.remove('selected'));
+      chipBtn.classList.add('selected');
+    }
+    this.renderEquipmentList();
+  }
+
+  filterRecords() {
+    this.renderEquipmentList();
+  }
+
+  renderEquipmentList() {
+    const container = document.getElementById("equipment-list");
+    if (!container) return;
+
+    const searchTerm = (document.getElementById("search-input")?.value || "").toLowerCase();
+
+    let filtered = this.orders.filter(r => {
+      const matchSearch = 
+        (r.Cliente || "").toLowerCase().includes(searchTerm) ||
+        (r.Telefono || "").toLowerCase().includes(searchTerm) ||
+        (r.Marca_Modelo || "").toLowerCase().includes(searchTerm) ||
+        (r.ID_Orden || "").toLowerCase().includes(searchTerm);
+
+      if (!matchSearch) return false;
+
+      if (this.activeFilter === "TODOS") return true;
+      if (this.activeFilter === "EN_TALLER") {
+        return r.Estado !== "Entregado";
+      }
+      return r.Estado === this.activeFilter;
+    });
+
+    if (filtered.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px; background-color: var(--bg-card); border-radius: var(--radius-md); border: 2px dashed var(--border-color);">
+          <div style="font-size: 3rem; margin-bottom: 8px;">📋</div>
+          <h3>No se encontraron equipos</h3>
+          <p style="color: var(--text-muted); font-size: 0.95rem;">Prueba con otra búsqueda o registra un nuevo equipo.</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = filtered.map(r => {
+      const safeId = this.escapeHTML(r.ID_Orden || "");
+      return `
+      <div class="equipment-card">
+        <div class="card-top">
+          <div>
+            <div class="client-name">👤 ${this.escapeHTML(r.Cliente || "Sin Nombre")}</div>
+            <div style="font-size: 0.95rem; color: var(--text-muted); font-weight: bold;">📞 ${this.escapeHTML(r.Telefono || "")}</div>
+          </div>
+          <span class="order-id">${safeId}</span>
+        </div>
+
+        <div class="equipment-info">
+          <div>
+            <div class="info-label">Equipo</div>
+            <div class="info-val">💻 ${this.escapeHTML(r.Tipo_Equipo || "")} ${this.escapeHTML(r.Marca_Modelo || "")}</div>
+          </div>
+          <div>
+            <div class="info-label">Costo Total</div>
+            <div class="info-val" style="color: var(--success); font-size: 1.2rem;">$${parseFloat(r.Costo_Total || 0).toFixed(2)}</div>
+          </div>
+        </div>
+
+        <div style="font-size: 0.95rem;">
+          <strong>🔌 Accesorios:</strong> ${this.escapeHTML(r.Accesorios || "Ninguno")}
+        </div>
+
+        <div style="font-size: 0.95rem; background-color: var(--bg-secondary); padding: 8px; border-radius: var(--radius-sm);">
+          <strong>🔍 Diagnóstico / Falla:</strong> ${this.escapeHTML(r.Falla_Reportada || "Sin detalle")}
+          ${r.Trabajo_Realizado ? `<br><strong style="color: var(--primary);">🛠️ Trabajo / Repuestos:</strong> ${this.escapeHTML(r.Trabajo_Realizado)}` : ''}
+          ${r.Fotos_Drive_URL ? `<br><strong style="color: var(--info);">📁 Foto Drive:</strong> <a href="${r.Fotos_Drive_URL}" target="_blank" style="color: var(--primary); text-decoration: underline;">Ver Foto</a>` : ''}
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+          <span class="status-pill" data-status="${r.Estado || "Recibido"}">
+            ● ${r.Estado || "Recibido"}
+          </span>
+          <span style="font-size: 0.8rem; color: var(--text-muted);">
+            ${r._sync_status === "Pendiente" ? "⏳ Guardado local" : "☁️ Sincronizado"}
+          </span>
+        </div>
+
+        <div class="card-actions">
+          <button class="btn btn-secondary btn-sm" onclick="window.app && window.app.openUpdateModal('${safeId}')">
+            📝 Diagnóstico / Estado
+          </button>
+          <button class="btn btn-whatsapp btn-sm" onclick="window.app && window.app.sendWhatsAppByOrderId('${safeId}')">
+            💬 WhatsApp
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="window.app && window.app.showTicketModal('${safeId}')">
+            📄 Ticket PDF
+          </button>
+        </div>
+      </div>
+    `;}).join("");
+  }
+
+  renderStats() {
+    let totalMoney = 0;
+    let activeEquip = 0;
+    let readyEquip = 0;
+    const deliveredList = [];
+
+    this.orders.forEach(r => {
+      const cost = parseFloat(r.Costo_Total || 0);
+      const status = r.Estado || "Recibido";
+
+      if (status === "Entregado") {
+        totalMoney += cost;
+        deliveredList.push(r);
+      } else {
+        activeEquip++;
+        if (status === "Listo") readyEquip++;
+      }
+    });
+
+    const statMoney = document.getElementById("stat-total-money");
+    const statActive = document.getElementById("stat-active-equip");
+    const statReady = document.getElementById("stat-ready-equip");
+
+    if (statMoney) statMoney.textContent = `$${totalMoney.toFixed(2)}`;
+    if (statActive) statActive.textContent = activeEquip;
+    if (statReady) statReady.textContent = readyEquip;
+
+    const listEl = document.getElementById("recent-delivered-list");
+    if (listEl) {
+      if (deliveredList.length === 0) {
+        listEl.innerHTML = `<p style="color: var(--text-muted);">No hay entregas registradas aún.</p>`;
+      } else {
+        listEl.innerHTML = deliveredList.slice(0, 5).map(r => `
+          <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border-color);">
+            <div>
+              <strong>${this.escapeHTML(r.Cliente)}</strong> (${this.escapeHTML(r.Tipo_Equipo)})
+              <div style="font-size: 0.85rem; color: var(--text-muted);">${r.Fecha_Entrega || r.Fecha_Ingreso}</div>
+            </div>
+            <div style="font-size: 1.1rem; font-weight: bold; color: var(--success);">$${parseFloat(r.Costo_Total || 0).toFixed(2)}</div>
+          </div>
+        `).join("");
+      }
+    }
+  }
+
+  /* ==========================================
+     WHATSAPP, MODALES Y TICKETS
+     ========================================== */
+  sendWhatsAppByOrderId(orderId) {
+    const order = this.orders.find(o => o.ID_Orden === orderId);
+    if (!order) return;
+    this.sendWhatsApp(order.Telefono, order.Cliente, order.Tipo_Equipo, order.Estado, order.Costo_Total, order.Falla_Reportada, order.Trabajo_Realizado);
+  }
+
+  sendWhatsApp(phone, name, equipment, status, cost, issue, workDone) {
+    let cleanPhone = String(phone || "").replace(/\D/g, "");
+    if (!cleanPhone) {
+      alert("Número de teléfono no válido.");
+      return;
+    }
+
+    if (!cleanPhone.startsWith("593") && cleanPhone.startsWith("0")) {
+      cleanPhone = "593" + cleanPhone.substring(1);
+    }
+
+    const formattedCost = `$${parseFloat(cost || 0).toFixed(2)}`;
+    const issueDetail = issue ? `\n🔍 *Diagnóstico / Falla:* ${issue}` : "";
+    const workDetail = workDone ? `\n🛠️ *Solución / Trabajo:* ${workDone}` : "";
+
+    let msg = "";
+    if (status === "Esperando Aprobación") {
+      msg = `Hola ${name}, le saludamos de *COMPUKIT*.\n\nHemos finalizado la revisión y diagnóstico de su *${equipment}*:\n${issueDetail}${workDetail}\n\n💵 *Costo Estimado:* *${formattedCost}*\n\n¿Desea que procedamos con el trabajo? Por favor nos confirma para iniciar.`;
+    } else if (status === "En Diagnóstico") {
+      msg = `Hola ${name}, le saludamos de *COMPUKIT*. Le informamos que su *${equipment}* se encuentra actualmente en proceso de *revisión y diagnóstico técnico*. Le notificaremos apenas tengamos el informe detallado y costo.`;
+    } else if (status === "En Reparación") {
+      msg = `Hola ${name}, le saludamos de *COMPUKIT*. Le confirmamos que su *${equipment}* ya se encuentra *en proceso de reparación*.`;
+    } else if (status === "Listo") {
+      msg = `Hola ${name}, le saludamos de *COMPUKIT*. ¡Su *${equipment}* ya está *LISTO* para retirar! ✅\n\n💵 *Total a pagar:* *${formattedCost}*\n\nPuede pasar retirándolo en nuestro horario habitual.`;
+    } else if (status === "Entregado") {
+      msg = `Hola ${name}, gracias por confiar en *COMPUKIT*. Le confirmamos la entrega conforme de su *${equipment}*. ¡Estamos a la orden!`;
+    } else {
+      msg = `Hola ${name}, le saludamos de *COMPUKIT*. Su equipo *${equipment}* se encuentra registrado en estado: *${status}*.`;
+    }
+
+    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, "_blank");
+  }
+
+  openUpdateModal(orderId) {
+    const order = this.orders.find(o => o.ID_Orden === orderId);
+    if (!order) return;
+
+    document.getElementById("update-order-id").value = orderId;
+    document.getElementById("update-status-select").value = order.Estado || "Recibido";
+    document.getElementById("update-issue-description").value = order.Falla_Reportada || "";
+    document.getElementById("update-work-done").value = order.Trabajo_Realizado || "";
+    document.getElementById("update-total-cost").value = order.Costo_Total || 0;
+    const advanceInput = document.getElementById("update-advance-cost");
+    if (advanceInput) advanceInput.value = order.Abono || 0;
+
+    document.getElementById("modal-status").classList.add("active");
+  }
+
+  showTicketModal(orderId) {
+    const order = this.orders.find(o => o.ID_Orden === orderId);
+    if (!order) return;
+
+    this.currentTicketRecord = order;
+
+    document.getElementById("ticket-date").textContent = order.Fecha_Ingreso || new Date().toLocaleString();
+    document.getElementById("ticket-id").textContent = order.ID_Orden;
+    document.getElementById("ticket-client").textContent = order.Cliente;
+    document.getElementById("ticket-phone").textContent = order.Telefono;
+    document.getElementById("ticket-equipment").textContent = `${order.Tipo_Equipo} ${order.Marca_Modelo}`;
+    document.getElementById("ticket-acc").textContent = order.Accesorios || "Ninguno";
+    document.getElementById("ticket-issue").textContent = order.Falla_Reportada || "Sin detalle";
+    document.getElementById("ticket-cost").textContent = `$${parseFloat(order.Costo_Total || 0).toFixed(2)}`;
+
+    document.getElementById("modal-ticket").classList.add("active");
+  }
+
+  closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.remove("active");
+  }
+
+  downloadPDFTicket() {
+    if (!window.jspdf) {
+      alert("Generador PDF cargando...");
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+      unit: 'mm',
+      format: [80, 140]
+    });
+
+    const rec = this.currentTicketRecord;
+    if (!rec) return;
+
+    doc.setFont("courier", "bold");
+    doc.setFontSize(14);
+    doc.text("COMPUKIT", 40, 10, { align: "center" });
+
+    doc.setFontSize(8);
+    doc.setFont("courier", "normal");
+    doc.text("Taller de Reparaciones", 40, 14, { align: "center" });
+    doc.text("-----------------------------------", 40, 18, { align: "center" });
+
+    let y = 24;
+    doc.text(`Orden: ${rec.ID_Orden}`, 5, y); y += 5;
+    doc.text(`Fecha: ${rec.Fecha_Ingreso}`, 5, y); y += 5;
+    doc.text(`Cliente: ${rec.Cliente}`, 5, y); y += 5;
+    doc.text(`Tel: ${rec.Telefono}`, 5, y); y += 5;
+    doc.text(`Equipo: ${rec.Tipo_Equipo} ${rec.Marca_Modelo}`, 5, y); y += 5;
+    doc.text(`Accesorios: ${rec.Accesorios}`, 5, y); y += 6;
+
+    doc.text("Falla:", 5, y); y += 4;
+    const splitIssue = doc.splitTextToSize(rec.Falla_Reportada || "N/A", 70);
+    doc.text(splitIssue, 5, y);
+    y += (splitIssue.length * 4) + 4;
+
+    doc.text("-----------------------------------", 40, y, { align: "center" }); y += 5;
+    doc.setFont("courier", "bold");
+    doc.setFontSize(10);
+    doc.text(`TOTAL EST.: $${parseFloat(rec.Costo_Total || 0).toFixed(2)}`, 5, y);
+
+    doc.save(`Ticket_${rec.ID_Orden}.pdf`);
+  }
+
+  escapeHTML(str) {
+    return String(str || "").replace(/[&<>"']/g, function(m) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+    });
+  }
+}
+
+// Inicializar inmediatamente y vincular a window y al scope global
+try {
+  window.app = new CompukitApp();
+  var app = window.app;
+} catch (e) {
+  console.error("Error al inicializar CompukitApp:", e);
+}
+
+

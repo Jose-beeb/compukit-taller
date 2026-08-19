@@ -1,0 +1,10 @@
+# Ignorar carpetas y archivos pesados para búsqueda y contexto
+node_modules/
+dist/
+build/
+.cache/
+*.log
+*.pdf
+*.png
+*.jpg
+*.jpeg
