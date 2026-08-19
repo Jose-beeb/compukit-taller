@@ -936,6 +936,7 @@ class CompukitApp {
         <div style="font-size: 0.95rem; background-color: var(--bg-secondary); padding: 8px; border-radius: var(--radius-sm);">
           <strong>🔍 Diagnóstico / Falla:</strong> ${this.escapeHTML(r.Falla_Reportada || "Sin detalle")}
           ${r.Trabajo_Realizado ? `<br><strong style="color: var(--primary);">🛠️ Trabajo / Repuestos:</strong> ${this.escapeHTML(r.Trabajo_Realizado)}` : ''}
+          ${r.Tecnico_Responsable ? `<br><strong style="color: var(--text-muted);">👨‍🔧 Atendido por:</strong> <span style="font-weight: bold; color: var(--text-main);">${this.escapeHTML(r.Tecnico_Responsable)}</span>` : ''}
           ${r.Fotos_Drive_URL ? `<br><strong style="color: var(--info);">📁 Foto Drive:</strong> <a href="${r.Fotos_Drive_URL}" target="_blank" style="color: var(--primary); text-decoration: underline;">Ver Foto</a>` : ''}
         </div>
 

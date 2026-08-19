@@ -48,6 +48,7 @@ function initSheets() {
       "Fotos_Drive_URL",
       "Estado",
       "Trabajo_Realizado",
+      "Tecnico_Responsable",
       "Costo_Total",
       "Abono",
       "Saldo_Pendiente",
@@ -229,6 +230,7 @@ function doPost(e) {
         photoUrl,
         payload.Estado || "Recibido",
         payload.Trabajo_Realizado || "",
+        payload.Tecnico_Responsable || "Principal",
         total,
         abono,
         saldo,
@@ -294,6 +296,10 @@ function doPost(e) {
       if (payload.Trabajo_Realizado !== undefined) {
         const col = headers.indexOf("Trabajo_Realizado");
         if (col !== -1) sheetOrders.getRange(rowIndex, col + 1).setValue(payload.Trabajo_Realizado);
+      }
+      if (payload.Tecnico_Responsable) {
+        const col = headers.indexOf("Tecnico_Responsable");
+        if (col !== -1) sheetOrders.getRange(rowIndex, col + 1).setValue(payload.Tecnico_Responsable);
       }
       let currentTotal = parseFloat(data[rowIndex - 1][headers.indexOf("Costo_Total")]) || 0;
       let currentAbono = parseFloat(data[rowIndex - 1][headers.indexOf("Abono")]) || 0;
