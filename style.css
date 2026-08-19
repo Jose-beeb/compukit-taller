@@ -730,7 +730,18 @@ textarea.form-control {
 }
 
 /* Modal Ticket para Impresión y Descarga en Doble Copia (Cliente y Taller) */
+@page {
+  size: A4 portrait;
+  margin: 8mm;
+}
+
 @media print {
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    background: #fff !important;
+  }
   body * {
     visibility: hidden;
   }
@@ -741,35 +752,58 @@ textarea.form-control {
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 10px;
+    width: 100% !important;
+    max-width: 190mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
     color: #000;
     background: #fff;
-    border: none;
+    border: none !important;
+    page-break-after: avoid !important;
+    page-break-inside: avoid !important;
   }
   .modal-overlay, .modal-card {
+    position: static !important;
     background: transparent !important;
     box-shadow: none !important;
     border: none !important;
     padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
   }
   .modal-header, .btn-group {
     display: none !important;
+  }
+  .ticket-dual-container {
+    padding: 0 !important;
+    border: none !important;
+  }
+  .ticket-half {
+    padding: 8px 12px !important;
+    border: 1px dashed #000 !important;
+    background-color: #fff !important;
+    page-break-inside: avoid !important;
+  }
+  .cut-line {
+    margin: 10px 0 !important;
+    font-size: 0.8rem !important;
   }
 }
 
 .ticket-dual-container {
   background: #ffffff;
   color: #000000;
-  padding: 15px;
+  padding: 12px;
   border-radius: var(--radius-md);
   border: 1px solid #ddd;
   font-family: 'Courier New', Courier, monospace;
 }
 
 .ticket-half {
-  padding: 12px;
+  padding: 10px;
   border: 1px dashed #444;
   border-radius: var(--radius-sm);
   background-color: #fafafa;
@@ -778,49 +812,49 @@ textarea.form-control {
 .ticket-copy-tag {
   text-align: center;
   font-weight: 800;
-  font-size: 0.95rem;
-  padding: 4px 8px;
+  font-size: 0.85rem;
+  padding: 3px 6px;
   background-color: #e2e8f0;
   border-radius: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   color: #0f172a;
 }
 
 .cut-line {
   text-align: center;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: bold;
   color: #64748b;
-  margin: 16px 0;
-  letter-spacing: 2px;
+  margin: 12px 0;
+  letter-spacing: 1px;
   user-select: none;
 }
 
 .ticket-header {
   text-align: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   border-bottom: 1px dashed #000;
-  padding-bottom: 6px;
+  padding-bottom: 4px;
 }
 
 .ticket-header h2 {
-  font-size: 1.3rem;
+  font-size: 1.2rem;
   margin-bottom: 2px;
 }
 
 .ticket-row {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 6px;
-  font-size: 0.95rem;
+  margin-bottom: 4px;
+  font-size: 0.9rem;
 }
 
 .ticket-total {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: bold;
   border-top: 1px dashed #000;
-  padding-top: 6px;
-  margin-top: 8px;
+  padding-top: 4px;
+  margin-top: 6px;
 }
 
 /* Estilos de Tarjetas del Reporte Financiero */
