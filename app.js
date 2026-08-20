@@ -530,7 +530,8 @@ class CompukitApp {
      ========================================== */
   async submitNewRecord() {
     const name = document.getElementById("client-name").value.trim();
-    const phone = document.getElementById("client-phone").value.trim();
+    const rawPhone = document.getElementById("client-phone").value.trim();
+    const phone = this.formatDisplayPhone(rawPhone);
     const eqType = document.querySelector('input[name="eq-type"]:checked')?.value || "Laptop / Portátil";
     const brand = document.getElementById("brand-model").value.trim() || "Genérico";
     const accessories = this.getSelectedAccessories().join(", ") || "Ninguno";
@@ -1077,6 +1078,7 @@ class CompukitApp {
       const safeId = this.escapeHTML(r.ID_Orden || "");
       const imgUrl = this.getEquipmentImageUrl(r);
       const safeClient = this.escapeHTML(r.Cliente || "Sin Nombre");
+      const displayPhone = this.formatDisplayPhone(r.Telefono || "");
       const safeDriveUrl = r.Fotos_Drive_URL || "";
 
       return `
@@ -1084,7 +1086,7 @@ class CompukitApp {
         <div class="card-top">
           <div>
             <div class="client-name">👤 ${safeClient}</div>
-            <div style="font-size: 0.95rem; color: var(--text-muted); font-weight: bold;">📞 ${this.escapeHTML(r.Telefono || "")}</div>
+            <div style="font-size: 0.95rem; color: var(--text-muted); font-weight: bold;">📞 ${this.escapeHTML(displayPhone)}</div>
           </div>
           <span class="order-id">${safeId}</span>
         </div>
@@ -1279,20 +1281,71 @@ class CompukitApp {
   }
 
   /* ==========================================
-     WHATSAPP, MODALES Y TICKETS
+     FORMATEO DE TELÉFONOS Y WHATSAPP ECUADOR (+593)
      ========================================== */
+  formatPhoneForWhatsApp(phone) {
+    let digits = String(phone || "").replace(/\D/g, "");
+    if (!digits) return "";
+
+    // Si ya empieza con el código 593
+    if (digits.startsWith("593")) {
+      return digits;
+    }
+
+    // Si empieza con 0 (ej: 0991234567) -> quitar 0 y anteponer 593
+    if (digits.startsWith("0")) {
+      return "593" + digits.substring(1);
+    }
+
+    // Si tiene 9 dígitos y empieza con 9 (celular sin 0, ej: 991234567)
+    if (digits.length === 9 && digits.startsWith("9")) {
+      return "593" + digits;
+    }
+
+    // Si tiene 8 dígitos (teléfono fijo local)
+    if (digits.length === 8) {
+      return "5932" + digits;
+    }
+
+    // Si tiene 9 dígitos (teléfono fijo con código de provincia sin 0)
+    if (digits.length === 9) {
+      return "593" + digits;
+    }
+
+    // Si tiene entre 7 y 10 dígitos nacionales
+    if (digits.length >= 7 && digits.length <= 10) {
+      return "593" + digits;
+    }
+
+    return digits;
+  }
+
+  formatDisplayPhone(phone) {
+    let digits = String(phone || "").replace(/\D/g, "");
+    if (!digits) return "";
+    if (digits.startsWith("593") && digits.length === 12) {
+      return "0" + digits.substring(3);
+    }
+    if (digits.length === 9 && digits.startsWith("9")) {
+      return "0" + digits;
+    }
+    if (digits.length === 10 && digits.startsWith("0")) {
+      return digits;
+    }
+    if (!digits.startsWith("0") && digits.length >= 7 && digits.length <= 9) {
+      return "0" + digits;
+    }
+    return phone;
+  }
+
   sendWhatsAppDebtReminder(orderId) {
     const order = this.orders.find(o => String(o.ID_Orden).trim() === String(orderId).trim());
     if (!order) return;
 
-    let cleanPhone = String(order.Telefono || "").replace(/\D/g, "");
-    if (!cleanPhone) {
-      this.showToast("⚠️ Número de teléfono no válido.", "warning");
+    const cleanPhone = this.formatPhoneForWhatsApp(order.Telefono);
+    if (!cleanPhone || cleanPhone.length < 10) {
+      this.showToast("⚠️ Número de teléfono no válido para WhatsApp (ej: 0991234567).", "warning");
       return;
-    }
-
-    if (!cleanPhone.startsWith("593") && cleanPhone.startsWith("0")) {
-      cleanPhone = "593" + cleanPhone.substring(1);
     }
 
     const cleanEquipment = String(order.Tipo_Equipo || "Equipo").replace(/[^\p{L}\p{N}\s\/\-\.]/gu, "").trim();
@@ -1312,20 +1365,16 @@ class CompukitApp {
   }
 
   sendWhatsAppByOrderId(orderId) {
-    const order = this.orders.find(o => o.ID_Orden === orderId);
+    const order = this.orders.find(o => String(o.ID_Orden).trim() === String(orderId).trim());
     if (!order) return;
     this.sendWhatsApp(order.Telefono, order.Cliente, order.Tipo_Equipo, order.Estado, order.Costo_Total, order.Falla_Reportada, order.Trabajo_Realizado);
   }
 
   sendWhatsApp(phone, name, equipment, status, cost, issue, workDone) {
-    let cleanPhone = String(phone || "").replace(/\D/g, "");
-    if (!cleanPhone) {
-      this.showToast("⚠️ Número de teléfono no válido.", "warning");
+    const cleanPhone = this.formatPhoneForWhatsApp(phone);
+    if (!cleanPhone || cleanPhone.length < 10) {
+      this.showToast("⚠️ Número de teléfono no válido para WhatsApp (ej: 0991234567).", "warning");
       return;
-    }
-
-    if (!cleanPhone.startsWith("593") && cleanPhone.startsWith("0")) {
-      cleanPhone = "593" + cleanPhone.substring(1);
     }
 
     // Limpiar posibles emojis rotos o caracteres incompatibles en el tipo de equipo
@@ -1473,7 +1522,7 @@ class CompukitApp {
     const dateStr = order.Fecha_Ingreso || new Date().toLocaleString();
     const idStr = order.ID_Orden || "";
     const clientStr = this.cleanTextForTicket(order.Cliente) || "Consumidor Final";
-    const phoneStr = order.Telefono || "S/N";
+    const phoneStr = this.formatDisplayPhone(order.Telefono) || "S/N";
     const eqStr = `${this.cleanTextForTicket(order.Tipo_Equipo)} - ${this.cleanTextForTicket(order.Marca_Modelo)}`.trim();
     const accStr = this.cleanTextForTicket(order.Accesorios) || "Ninguno";
     const issueStr = this.cleanTextForTicket(order.Falla_Reportada) || "Sin detalle";
@@ -1522,6 +1571,7 @@ class CompukitApp {
     if (!rec) return;
 
     const cleanClient = this.cleanTextForTicket(rec.Cliente) || "Consumidor Final";
+    const cleanPhone = this.formatDisplayPhone(rec.Telefono) || "S/N";
     const cleanEq = `${this.cleanTextForTicket(rec.Tipo_Equipo)} - ${this.cleanTextForTicket(rec.Marca_Modelo)}`.trim();
     const cleanAcc = this.cleanTextForTicket(rec.Accesorios) || "Ninguno";
     const cleanIssue = this.cleanTextForTicket(rec.Falla_Reportada) || "Por diagnosticar";
@@ -1552,7 +1602,7 @@ class CompukitApp {
       doc.setFont("helvetica", "bold");
       doc.text("Cliente:", 15, y);
       doc.setFont("helvetica", "normal");
-      doc.text(`${cleanClient}   (Tel: ${rec.Telefono || 'S/N'})`, 38, y);
+      doc.text(`${cleanClient}   (Tel: ${cleanPhone})`, 38, y);
       y += 6;
 
       doc.setFont("helvetica", "bold");
@@ -1645,7 +1695,7 @@ class CompukitApp {
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(8);
-      doc.text(`Tel: ${rec.Telefono || 'S/N'}`, sx + 3, sy + 17);
+      doc.text(`Tel: ${cleanPhone}`, sx + 3, sy + 17);
 
       doc.setFontSize(7.5);
       const shortEq = doc.splitTextToSize(cleanEq, sw - 6)[0] || cleanEq;

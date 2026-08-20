@@ -152,11 +152,22 @@ function doGet(e) {
         const record = {};
         headers.forEach((h, idx) => {
           let val = row[idx];
-          if (val instanceof Date) {
-            val = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
-          }
           if (h === "Costo_Total" || h === "Abono" || h === "Saldo_Pendiente") {
             val = parseFloat(val) || 0;
+          }
+          if (h === "Telefono") {
+            let telDigits = String(val || "").replace(/\D/g, "");
+            if (telDigits.startsWith("593") && telDigits.length === 12) {
+              val = "0" + telDigits.substring(3);
+            } else if (telDigits.length === 9 && telDigits.startsWith("9")) {
+              val = "0" + telDigits;
+            } else if (telDigits.length === 10 && telDigits.startsWith("0")) {
+              val = telDigits;
+            } else if (telDigits.length === 9) {
+              val = "0" + telDigits;
+            } else {
+              val = String(val || "");
+            }
           }
           record[h] = val !== undefined ? val : "";
         });
@@ -280,7 +291,15 @@ function doPost(e) {
           case "ID_Orden": return orderId;
           case "Fecha_Ingreso": return payload.Fecha_Ingreso || nowStr;
           case "Cliente": return payload.Cliente || "";
-          case "Telefono": return payload.Telefono || "";
+          case "Telefono": {
+            let telDigits = String(payload.Telefono || "").replace(/\D/g, "");
+            if (telDigits.startsWith("593") && telDigits.length === 12) {
+              telDigits = "0" + telDigits.substring(3);
+            } else if (telDigits.length === 9 && telDigits.startsWith("9")) {
+              telDigits = "0" + telDigits;
+            }
+            return "'" + (telDigits || String(payload.Telefono || ""));
+          }
           case "Tipo_Equipo": return payload.Tipo_Equipo || "Computadora";
           case "Marca_Modelo": return payload.Marca_Modelo || "";
           case "Accesorios": return payload.Accesorios || "Ninguno";
