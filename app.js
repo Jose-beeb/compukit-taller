@@ -67,23 +67,45 @@ class CompukitApp {
     }
   }
 
-  /* ==========================================
-     GESTIÓN DE TÉCNICOS SINCRONIZADOS (NUBE)
-     ========================================== */
   renderTechnicianSelector() {
-    const select = document.getElementById("active-technician-select");
-    if (!select) return;
-
-    select.innerHTML = this.technicians.map(tech => `
+    const optionsHtml = this.technicians.map(tech => `
       <option value="${this.escapeHTML(tech)}" ${tech === this.activeTechnician ? 'selected' : ''}>
         ${this.escapeHTML(tech)}
       </option>
     `).join("");
+
+    // 1. Selector en la barra superior
+    const headerSelect = document.getElementById("active-technician-select");
+    if (headerSelect) headerSelect.innerHTML = optionsHtml;
+
+    // 2. Selector en el formulario de nuevo ingreso (Paso 1)
+    const recordSelect = document.getElementById("record-technician-select");
+    if (recordSelect) recordSelect.innerHTML = optionsHtml;
+
+    // 3. Selector en el modal de actualización
+    const updateSelect = document.getElementById("update-technician-select");
+    if (updateSelect) updateSelect.innerHTML = optionsHtml;
+
+    // 4. Selector de filtro en el listado de taller
+    const filterSelect = document.getElementById("filter-technician-select");
+    if (filterSelect) {
+      const currentVal = filterSelect.value || "TODOS";
+      filterSelect.innerHTML = `
+        <option value="TODOS" ${currentVal === 'TODOS' ? 'selected' : ''}>👨‍🔧 Todos los Técnicos</option>
+        ${this.technicians.map(tech => `
+          <option value="${this.escapeHTML(tech)}" ${currentVal === tech ? 'selected' : ''}>
+            👤 ${this.escapeHTML(tech)}
+          </option>
+        `).join("")}
+      `;
+    }
   }
 
   changeActiveTechnician(techName) {
     this.activeTechnician = techName;
     localStorage.setItem("compukit_active_tech", techName);
+    const recordSelect = document.getElementById("record-technician-select");
+    if (recordSelect) recordSelect.value = techName;
   }
 
   renderTechniciansManager() {
@@ -524,6 +546,7 @@ class CompukitApp {
 
     const orderId = "CK-" + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
     const nowStr = new Date().toLocaleString("es-ES");
+    const techAssigned = document.getElementById("record-technician-select")?.value || this.activeTechnician || "Principal";
 
     const orderObj = {
       "action": "create",
@@ -539,7 +562,7 @@ class CompukitApp {
       "Foto_Base64": this.selectedPhotoBase64, // Se procesará y subirá a Drive
       "Estado": "Recibido",
       "Trabajo_Realizado": "",
-      "Tecnico_Responsable": this.activeTechnician || "Principal",
+      "Tecnico_Responsable": techAssigned,
       "Costo_Total": cost,
       "Abono": advance,
       "Saldo_Pendiente": cost - advance,
@@ -580,6 +603,7 @@ class CompukitApp {
     const workDone = document.getElementById("update-work-done").value.trim();
     const totalCost = parseFloat(document.getElementById("update-total-cost").value) || 0;
     const initialAdvance = parseFloat(document.getElementById("update-advance-cost")?.value) || 0;
+    const updatedTech = document.getElementById("update-technician-select")?.value || "Principal";
 
     const order = this.orders.find(o => o.ID_Orden === orderId);
     if (!order) return;
@@ -589,6 +613,7 @@ class CompukitApp {
     if (newIssue) order.Falla_Reportada = newIssue;
     order.Trabajo_Realizado = workDone;
     order.Costo_Total = totalCost;
+    order.Tecnico_Responsable = updatedTech;
 
     let finalPayment = 0;
     if (newStatus === "Entregado") {
@@ -627,6 +652,7 @@ class CompukitApp {
       Estado: newStatus,
       Falla_Reportada: order.Falla_Reportada,
       Trabajo_Realizado: workDone,
+      Tecnico_Responsable: updatedTech,
       Costo_Total: totalCost,
       Abono: order.Abono,
       Fecha_Entrega: order.Fecha_Entrega || "",
@@ -993,6 +1019,7 @@ class CompukitApp {
     if (!container) return;
 
     const searchTerm = (document.getElementById("search-input")?.value || "").toLowerCase();
+    const selectedTechFilter = document.getElementById("filter-technician-select")?.value || "TODOS";
 
     let filtered = this.orders.filter(r => {
       const matchSearch =
@@ -1001,9 +1028,14 @@ class CompukitApp {
         (r.Tipo_Equipo || "").toLowerCase().includes(searchTerm) ||
         (r.Marca_Modelo || "").toLowerCase().includes(searchTerm) ||
         (r.Falla_Reportada || "").toLowerCase().includes(searchTerm) ||
+        (r.Tecnico_Responsable || "").toLowerCase().includes(searchTerm) ||
         (r.ID_Orden || "").toLowerCase().includes(searchTerm);
 
       if (!matchSearch) return false;
+
+      if (selectedTechFilter !== "TODOS" && (r.Tecnico_Responsable || "Principal") !== selectedTechFilter) {
+        return false;
+      }
 
       if (this.activeFilter === "TODOS") return true;
       if (this.activeFilter === "EN_TALLER") {
@@ -1305,6 +1337,9 @@ class CompukitApp {
     const advanceInput = document.getElementById("update-advance-cost");
     if (advanceInput) advanceInput.value = order.Abono || 0;
 
+    const techSelect = document.getElementById("update-technician-select");
+    if (techSelect) techSelect.value = order.Tecnico_Responsable || this.activeTechnician || "Principal";
+
     const deliverySection = document.getElementById("delivery-payment-section");
     const paymentTypeSelect = document.getElementById("update-payment-type");
     const deliveryPaidInput = document.getElementById("delivery-amount-paid");
@@ -1367,6 +1402,7 @@ class CompukitApp {
     const totalCostStr = `$${parseFloat(order.Costo_Total || 0).toFixed(2)}`;
     const advanceStr = `$${parseFloat(order.Abono || 0).toFixed(2)}`;
     const balanceStr = `$${parseFloat(order.Saldo_Pendiente || 0).toFixed(2)}`;
+    const techStr = order.Tecnico_Responsable || "Principal";
 
     // Llenar ambas copias (Cliente y Taller)
     document.querySelectorAll(".ticket-date-val").forEach(el => el.textContent = dateStr);
@@ -1375,6 +1411,7 @@ class CompukitApp {
     document.querySelectorAll(".ticket-phone-val").forEach(el => el.textContent = phoneStr);
     document.querySelectorAll(".ticket-equipment-val").forEach(el => el.textContent = eqStr);
     document.querySelectorAll(".ticket-acc-val").forEach(el => el.textContent = accStr);
+    document.querySelectorAll(".ticket-tech-val").forEach(el => el.textContent = techStr);
     document.querySelectorAll(".ticket-issue-val").forEach(el => el.textContent = issueStr);
     document.querySelectorAll(".ticket-cost-val").forEach(el => el.textContent = totalCostStr);
     document.querySelectorAll(".ticket-advance-val").forEach(el => el.textContent = advanceStr);
@@ -1450,6 +1487,12 @@ class CompukitApp {
       doc.text("Accesorios:", 15, y);
       doc.setFont("helvetica", "normal");
       doc.text(cleanAcc, 38, y);
+      y += 6;
+
+      doc.setFont("helvetica", "bold");
+      doc.text("Atendido por:", 15, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(rec.Tecnico_Responsable || "Principal", 38, y);
       y += 6;
 
       doc.setFont("helvetica", "bold");
