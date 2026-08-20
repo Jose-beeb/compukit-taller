@@ -857,6 +857,98 @@ textarea.form-control {
   margin-top: 6px;
 }
 
+/* Sección de 3 Etiquetas Recortables para Taller */
+.ticket-stickers-section {
+  margin-top: 10px;
+  border-top: 1px dashed #64748b;
+  padding-top: 8px;
+}
+
+.stickers-heading {
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-align: center;
+  color: #334155;
+  margin-bottom: 6px;
+}
+
+.stickers-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 6px;
+}
+
+.sticker-tag {
+  border: 1px dashed #000;
+  border-radius: 4px;
+  padding: 6px;
+  background-color: #fff;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.tag-title {
+  font-weight: 900;
+  font-size: 0.75rem;
+  border-bottom: 1px dotted #ccc;
+  padding-bottom: 2px;
+  margin-bottom: 3px;
+  color: #0f172a;
+}
+
+.tag-row {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag-note {
+  font-size: 0.65rem;
+  font-weight: bold;
+  color: var(--primary);
+  margin-top: 3px;
+  text-align: right;
+  border-top: 1px dotted #eee;
+  padding-top: 2px;
+}
+
+/* Miniatura de foto en tarjetas de equipos */
+.card-photo-wrapper {
+  margin-top: 8px;
+  margin-bottom: 4px;
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+}
+
+.card-photo-thumb {
+  width: 100%;
+  max-height: 140px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--border-color);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-photo-thumb:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-hover);
+}
+
+.card-photo-badge {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 4px;
+  backdrop-filter: blur(2px);
+}
+
+
 /* Estilos de Tarjetas del Reporte Financiero */
 .stats-grid {
   display: grid;

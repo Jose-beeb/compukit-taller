@@ -1075,15 +1075,26 @@ class CompukitApp {
 
     container.innerHTML = filtered.map(r => {
       const safeId = this.escapeHTML(r.ID_Orden || "");
+      const imgUrl = this.getEquipmentImageUrl(r);
+      const safeClient = this.escapeHTML(r.Cliente || "Sin Nombre");
+      const safeDriveUrl = r.Fotos_Drive_URL || "";
+
       return `
       <div class="equipment-card">
         <div class="card-top">
           <div>
-            <div class="client-name">👤 ${this.escapeHTML(r.Cliente || "Sin Nombre")}</div>
+            <div class="client-name">👤 ${safeClient}</div>
             <div style="font-size: 0.95rem; color: var(--text-muted); font-weight: bold;">📞 ${this.escapeHTML(r.Telefono || "")}</div>
           </div>
           <span class="order-id">${safeId}</span>
         </div>
+
+        ${imgUrl ? `
+        <div class="card-photo-wrapper" onclick="window.app && window.app.openPhotoViewer('${imgUrl}', '${safeId}', '${safeClient}', '${safeDriveUrl}')" title="Toca para ver la foto en grande">
+          <img src="${imgUrl}" alt="Foto ${safeId}" class="card-photo-thumb" loading="lazy" onerror="this.parentElement.style.display='none'">
+          <span class="card-photo-badge">📷 Ver Foto</span>
+        </div>
+        ` : ''}
 
         <div class="equipment-info">
           <div>
@@ -1104,7 +1115,7 @@ class CompukitApp {
           <strong>🔍 Diagnóstico / Falla:</strong> ${this.escapeHTML(r.Falla_Reportada || "Sin detalle")}
           ${r.Trabajo_Realizado ? `<br><strong style="color: var(--primary);">🛠️ Trabajo / Repuestos:</strong> ${this.escapeHTML(r.Trabajo_Realizado)}` : ''}
           ${r.Tecnico_Responsable ? `<br><strong style="color: var(--text-muted);">👨‍🔧 Atendido por:</strong> <span style="font-weight: bold; color: var(--text-main);">${this.escapeHTML(r.Tecnico_Responsable)}</span>` : ''}
-          ${r.Fotos_Drive_URL ? `<br><strong style="color: var(--info);">📁 Foto Drive:</strong> <a href="${r.Fotos_Drive_URL}" target="_blank" style="color: var(--primary); text-decoration: underline;">Ver Foto</a>` : ''}
+          ${r.Fotos_Drive_URL ? `<br><strong style="color: var(--info);">📁 Foto Drive:</strong> <a href="${r.Fotos_Drive_URL}" target="_blank" style="color: var(--primary); text-decoration: underline;">Abrir en Drive</a>` : ''}
         </div>
 
         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
@@ -1343,9 +1354,58 @@ class CompukitApp {
     window.open(waUrl, "_blank");
   }
 
+  getEquipmentImageUrl(order) {
+    if (!order) return "";
+    if (order.Foto_Base64 && order.Foto_Base64.startsWith("data:image")) {
+      return order.Foto_Base64;
+    }
+    const url = order.Fotos_Drive_URL || "";
+    if (!url) return "";
+    const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
+    }
+    return url;
+  }
+
+  openPhotoViewer(imgUrl, orderId = "", clientName = "", driveUrl = "") {
+    if (!imgUrl) return;
+    const imgEl = document.getElementById("photo-viewer-img");
+    const titleEl = document.getElementById("photo-viewer-title");
+    const linkEl = document.getElementById("photo-viewer-drive-link");
+    const modal = document.getElementById("modal-photo-viewer");
+
+    if (imgEl) imgEl.src = imgUrl;
+    if (titleEl) {
+      titleEl.textContent = `📷 ${clientName ? clientName + ' - ' : ''}${orderId || 'Foto del Equipo'}`;
+    }
+    if (linkEl) {
+      if (driveUrl) {
+        linkEl.href = driveUrl;
+        linkEl.style.display = "inline-flex";
+      } else {
+        linkEl.style.display = "none";
+      }
+    }
+    if (modal) modal.classList.add("active");
+  }
+
   openUpdateModal(orderId) {
     const order = this.orders.find(o => String(o.ID_Orden).trim() === String(orderId).trim());
     if (!order) return;
+
+    // Mostrar foto del equipo si existe
+    const imgUrl = this.getEquipmentImageUrl(order);
+    const photoContainer = document.getElementById("update-photo-container");
+    const photoImg = document.getElementById("update-photo-img");
+    if (photoContainer && photoImg) {
+      if (imgUrl) {
+        photoImg.src = imgUrl;
+        photoContainer.style.display = "block";
+      } else {
+        photoContainer.style.display = "none";
+      }
+    }
 
     document.getElementById("update-order-id").value = orderId;
     document.getElementById("update-status-select").value = order.Estado || "Recibido";
@@ -1536,18 +1596,68 @@ class CompukitApp {
     };
 
     // COPIA 1: CLIENTE (Mitad Superior)
-    printCopy(12, "COPIA CLIENTE - COMPROBANTE DE RECEPCION");
+    printCopy(10, "COPIA CLIENTE - COMPROBANTE DE RECEPCION");
 
     // LÍNEA DE CORTE CENTRAL
     doc.setLineDashPattern([2, 2], 0);
     doc.setDrawColor(100, 100, 100);
-    doc.line(10, 148, 200, 148);
+    doc.line(10, 142, 200, 142);
     doc.setFontSize(8);
-    doc.text(" LINEA DE CORTE ", 105, 147, { align: "center" });
+    doc.text("✂️ LINEA DE CORTE ENTREGA / TALLER ✂️", 105, 141, { align: "center" });
     doc.setLineDashPattern([], 0); // Restaurar línea sólida
 
     // COPIA 2: TALLER (Mitad Inferior)
-    printCopy(160, "COPIA TALLER - CONTROL INTERNO");
+    printCopy(146, "COPIA TALLER - CONTROL INTERNO");
+
+    // SECCIÓN: 3 ETIQUETAS RECORTABLES PARA EQUIPO Y ACCESORIOS
+    const stickerY = 247;
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.text("--- ✂️ ETIQUETAS RECORTABLES PARA EQUIPO Y ACCESORIOS (3 ETIQUETAS) ✂️ ---", 105, stickerY - 2, { align: "center" });
+
+    const stickers = [
+      { label: "🏷️ 1: EQUIPO", x: 15 },
+      { label: "🔌 2: CARGADOR", x: 76.5 },
+      { label: "📦 3: ACCESORIOS", x: 138 }
+    ];
+
+    stickers.forEach((st) => {
+      const sx = st.x;
+      const sy = stickerY;
+      const sw = 57;
+      const sh = 38;
+
+      // Marco punteado de recorte
+      doc.setLineDashPattern([1.5, 1.5], 0);
+      doc.setDrawColor(80, 80, 80);
+      doc.rect(sx, sy, sw, sh);
+      doc.setLineDashPattern([], 0);
+
+      // Contenido de la etiqueta
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.text(`COMPUKIT | ${rec.ID_Orden}`, sx + 3, sy + 5);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      const shortName = doc.splitTextToSize(cleanClient, sw - 6)[0] || cleanClient;
+      doc.text(shortName, sx + 3, sy + 11);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(`Tel: ${rec.Telefono || 'S/N'}`, sx + 3, sy + 17);
+
+      doc.setFontSize(7.5);
+      const shortEq = doc.splitTextToSize(cleanEq, sw - 6)[0] || cleanEq;
+      doc.text(`Eq: ${shortEq}`, sx + 3, sy + 23);
+
+      doc.setFontSize(7);
+      doc.text(`Tec: ${rec.Tecnico_Responsable || 'Principal'}`, sx + 3, sy + 28);
+
+      doc.setFont("helvetica", "bolditalic");
+      doc.setFontSize(7.5);
+      doc.text(st.label, sx + 3, sy + 34);
+    });
 
     doc.save(`Ticket_Doble_${rec.ID_Orden}.pdf`);
   }

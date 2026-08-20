@@ -382,6 +382,13 @@
       <form id="form-update-status" onsubmit="return false;">
         <input type="hidden" id="update-order-id">
 
+        <!-- FOTO DEL EQUIPO SI EXISTE -->
+        <div id="update-photo-container" style="display: none; text-align: center; margin-bottom: 14px; background: var(--bg-secondary); padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+          <label class="form-label" style="font-size: 0.85rem; margin-bottom: 6px;">📷 Fotografía del Equipo Registrada:</label>
+          <img id="update-photo-img" src="" alt="Foto del equipo" style="max-height: 150px; max-width: 100%; border-radius: var(--radius-sm); object-fit: contain; cursor: pointer; border: 2px solid var(--border-color);" onclick="window.app && window.app.openPhotoViewer(this.src)">
+          <div style="font-size: 0.75rem; color: var(--primary); font-weight: bold; margin-top: 4px;">🔍 Toca la foto para ver en pantalla completa</div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Estado Actual</label>
           <select id="update-status-select" class="form-control" style="font-size: 1.15rem; font-weight: 700;" onchange="window.app && window.app.onStatusSelectChange()">
@@ -525,12 +532,58 @@
             <span>Total Est.:</span>
             <span class="ticket-cost-val">$0.00</span>
           </div>
+
+          <!-- 3 ETIQUETAS RECORTABLES PARA TALLER -->
+          <div class="ticket-stickers-section">
+            <div class="stickers-heading">✂️ ETIQUETAS RECORTABLES (PEGAR EN EQUIPO Y ACCESORIOS)</div>
+            <div class="stickers-container">
+              <div class="sticker-tag">
+                <div class="tag-title">CK | <span class="ticket-id-val"></span></div>
+                <div class="tag-row">👤 <strong><span class="ticket-client-val"></span></strong></div>
+                <div class="tag-row">📞 <span class="ticket-phone-val"></span></div>
+                <div class="tag-row">💻 <span class="ticket-equipment-val"></span></div>
+                <div class="tag-note">🏷️ Etiqueta 1: EQUIPO</div>
+              </div>
+              <div class="sticker-tag">
+                <div class="tag-title">CK | <span class="ticket-id-val"></span></div>
+                <div class="tag-row">👤 <strong><span class="ticket-client-val"></span></strong></div>
+                <div class="tag-row">📞 <span class="ticket-phone-val"></span></div>
+                <div class="tag-row">💻 <span class="ticket-equipment-val"></span></div>
+                <div class="tag-note">🔌 Etiqueta 2: CARGADOR</div>
+              </div>
+              <div class="sticker-tag">
+                <div class="tag-title">CK | <span class="ticket-id-val"></span></div>
+                <div class="tag-row">👤 <strong><span class="ticket-client-val"></span></strong></div>
+                <div class="tag-row">📞 <span class="ticket-phone-val"></span></div>
+                <div class="tag-row">💻 <span class="ticket-equipment-val"></span></div>
+                <div class="tag-note">📦 Etiqueta 3: ACCESORIOS</div>
+              </div>
+            </div>
+          </div>
+
         </div>
 
       </div>
 
       <div class="btn-group" style="margin-top: 16px;">
         <button class="btn btn-primary" style="width: 100%; font-size: 1.15rem; padding: 14px;" onclick="window.app && window.app.downloadPDFTicket()">📥 Descargar Comprobante en PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: VISOR DE FOTOGRAFÍA EN ALTA RESOLUCIÓN -->
+  <div id="modal-photo-viewer" class="modal-overlay" onclick="if(event.target === this) window.app && window.app.closeModal('modal-photo-viewer')">
+    <div class="modal-card" style="max-width: 600px; text-align: center; padding: 16px;">
+      <div class="modal-header" style="margin-bottom: 8px;">
+        <h3 class="modal-title" id="photo-viewer-title">📷 Fotografía del Equipo</h3>
+        <button class="icon-btn" onclick="window.app && window.app.closeModal('modal-photo-viewer')">✖️</button>
+      </div>
+      <div style="margin: 10px 0; max-height: 65vh; overflow: auto; display: flex; justify-content: center; align-items: center; background: #000; border-radius: var(--radius-sm); border: 2px solid var(--border-color);">
+        <img id="photo-viewer-img" src="" alt="Foto equipo grande" style="max-width: 100%; max-height: 60vh; object-fit: contain;">
+      </div>
+      <div class="btn-group">
+        <a id="photo-viewer-drive-link" href="#" target="_blank" class="btn btn-secondary" style="display: none; justify-content: center; font-size: 0.95rem;">📁 Abrir en Google Drive</a>
+        <button class="btn btn-primary" onclick="window.app && window.app.closeModal('modal-photo-viewer')">Cerrar</button>
       </div>
     </div>
   </div>
