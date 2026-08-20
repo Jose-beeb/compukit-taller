@@ -390,12 +390,37 @@ function doPost(e) {
         // Si se cobró saldo al entregar
         const paymentAmount = parseFloat(payload.Cobro_Final) || 0;
         if (paymentAmount > 0) {
+          const remaining = Math.max(0, currentTotal - currentAbono);
+          const concept = "Cobro final entrega (" + (payload.Cliente || orderId) + ")" +
+            (remaining > 0 ? " [Saldo pendiente: $" + remaining.toFixed(2) + "]" : " [Liquidado 100%]");
+
           const cashRow = [
             nowStr,
             orderId,
-            "Cobro final entrega (" + (payload.Cliente || orderId) + ")",
+            concept,
             "Ingreso",
             paymentAmount,
+            payload.Metodo_Pago || "Efectivo"
+          ];
+          sheetCash.appendRow(cashRow);
+        }
+      } else {
+        // Si no está entregado pero hubo un abono incremental registrado en taller
+        let incrementalPayment = parseFloat(payload.Pago_Incremental) || 0;
+        if (incrementalPayment <= 0 && currentAbono > (abonoCol !== -1 ? (parseFloat(data[rowIndex - 1][abonoCol]) || 0) : 0)) {
+          incrementalPayment = currentAbono - (parseFloat(data[rowIndex - 1][abonoCol]) || 0);
+        }
+
+        if (incrementalPayment > 0) {
+          const remaining = Math.max(0, currentTotal - currentAbono);
+          const concept = "Abono adicional en taller (" + (payload.Cliente || orderId) + ") [Total abonado: $" + currentAbono.toFixed(2) + (remaining > 0 ? " | Saldo pendiente: $" + remaining.toFixed(2) : " | Liquidado") + "]";
+
+          const cashRow = [
+            nowStr,
+            orderId,
+            concept,
+            "Ingreso",
+            incrementalPayment,
             payload.Metodo_Pago || "Efectivo"
           ];
           sheetCash.appendRow(cashRow);

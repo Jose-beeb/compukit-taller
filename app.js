@@ -602,12 +602,13 @@ class CompukitApp {
     const newIssue = document.getElementById("update-issue-description").value.trim();
     const workDone = document.getElementById("update-work-done").value.trim();
     const totalCost = parseFloat(document.getElementById("update-total-cost").value) || 0;
-    const initialAdvance = parseFloat(document.getElementById("update-advance-cost")?.value) || 0;
+    const advanceInput = parseFloat(document.getElementById("update-advance-cost")?.value) || 0;
     const updatedTech = document.getElementById("update-technician-select")?.value || "Principal";
 
     const order = this.orders.find(o => o.ID_Orden === orderId);
     if (!order) return;
 
+    const prevAbono = parseFloat(order.Abono || 0);
     const nowStr = new Date().toLocaleString("es-ES");
     order.Estado = newStatus;
     if (newIssue) order.Falla_Reportada = newIssue;
@@ -616,6 +617,8 @@ class CompukitApp {
     order.Tecnico_Responsable = updatedTech;
 
     let finalPayment = 0;
+    let incrementalPayment = 0;
+
     if (newStatus === "Entregado") {
       order.Fecha_Entrega = nowStr;
       const paymentType = document.getElementById("update-payment-type")?.value || "FULL";
@@ -623,23 +626,27 @@ class CompukitApp {
 
       if (paymentType === "FULL") {
         // Se cobró el saldo completo restante
-        finalPayment = Math.max(0, totalCost - initialAdvance);
+        finalPayment = Math.max(0, totalCost - advanceInput);
         order.Abono = totalCost;
         order.Saldo_Pendiente = 0;
       } else if (paymentType === "PARTIAL") {
         // Se cobró un monto parcial al entregar
         finalPayment = deliveryPaidInput;
-        order.Abono = initialAdvance + deliveryPaidInput;
+        order.Abono = advanceInput + deliveryPaidInput;
         order.Saldo_Pendiente = Math.max(0, totalCost - order.Abono);
       } else {
         // Sin cobro al entregar (quedó a crédito)
         finalPayment = 0;
-        order.Abono = initialAdvance;
-        order.Saldo_Pendiente = Math.max(0, totalCost - initialAdvance);
+        order.Abono = advanceInput;
+        order.Saldo_Pendiente = Math.max(0, totalCost - advanceInput);
       }
     } else {
-      order.Abono = initialAdvance;
-      order.Saldo_Pendiente = Math.max(0, totalCost - initialAdvance);
+      // Si está en taller y el usuario registró un abono mayor al anterior
+      if (advanceInput > prevAbono) {
+        incrementalPayment = advanceInput - prevAbono;
+      }
+      order.Abono = advanceInput;
+      order.Saldo_Pendiente = Math.max(0, totalCost - advanceInput);
     }
 
     order._sync_status = "Pendiente";
@@ -657,6 +664,7 @@ class CompukitApp {
       Abono: order.Abono,
       Fecha_Entrega: order.Fecha_Entrega || "",
       Cobro_Final: finalPayment,
+      Pago_Incremental: incrementalPayment,
       Metodo_Pago: "Efectivo"
     };
 
@@ -665,7 +673,17 @@ class CompukitApp {
     this.closeModal("modal-status");
     this.renderEquipmentList();
     this.renderStats();
-    this.showToast(`✅ Estado actualizado: ${newStatus}${newStatus === 'Entregado' ? ` (Cobrado: $${finalPayment.toFixed(2)})` : ''}`, "success");
+
+    let toastMsg = `✅ Estado actualizado: ${newStatus}`;
+    if (newStatus === 'Entregado' && finalPayment > 0) {
+      toastMsg += ` (Cobro de entrega: $${finalPayment.toFixed(2)})`;
+    } else if (incrementalPayment > 0) {
+      toastMsg += ` (Abono adicional recibido: $${incrementalPayment.toFixed(2)})`;
+    }
+    if (order.Saldo_Pendiente > 0) {
+      toastMsg += ` [Pendiente: $${order.Saldo_Pendiente.toFixed(2)}]`;
+    }
+    this.showToast(toastMsg, "success");
   }
 
   /* ==========================================
