@@ -308,6 +308,26 @@
         <div id="config-test-result" style="margin-top: 16px; font-weight: bold;"></div>
       </div>
 
+      <!-- SECCIÓN DE MANTENIMIENTO, LIMPIEZA DE CACHÉ Y RESET -->
+      <div class="wizard-card" style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 8px;">🧹 Mantenimiento y Solución de Problemas</h3>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 14px;">
+          Si realizaste cambios en el código o notas lentitud, usa estas herramientas para refrescar la app sin perder tus datos de Google Sheets.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button type="button" class="btn btn-secondary" onclick="window.app && window.app.clearAppCache()" style="width: 100%; justify-content: center; font-size: 1rem;">
+            🚀 Limpiar Caché y Forzar Última Versión
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="window.app && window.app.fetchFromSheets(true)" style="width: 100%; justify-content: center; font-size: 1rem;">
+            🔄 Re-sincronizar Datos desde Google Sheets
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="window.app && window.app.resetAppStorage()" style="width: 100%; justify-content: center; font-size: 1rem; color: var(--danger); border-color: var(--danger);">
+            ⚠️ Restablecer Datos Locales del Dispositivo
+          </button>
+        </div>
+      </div>
+
       <div class="wizard-card">
         <h3>❓ ¿Cómo obtener la URL de Google Sheets?</h3>
         <ol style="margin-left: 20px; margin-top: 10px; line-height: 1.6;">

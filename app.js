@@ -103,12 +103,12 @@ class CompukitApp {
     if (!input) return;
     const val = input.value.trim();
     if (!val) {
-      alert("Por favor escribe el nombre del técnico.");
+      this.showToast("⚠️ Por favor escribe el nombre del técnico.", "warning");
       return;
     }
 
     if (this.technicians.includes(val)) {
-      alert("Este técnico ya se encuentra registrado.");
+      this.showToast("⚠️ Este técnico ya se encuentra registrado.", "warning");
       return;
     }
 
@@ -120,12 +120,12 @@ class CompukitApp {
 
     // Sincronizar con Google Sheets para que aparezca en los demás celulares
     this.syncTechniciansToCloud();
-    alert(`✅ Técnico añadido y sincronizado: "${val}"`);
+    this.showToast(`✅ Técnico añadido y sincronizado: "${val}"`, "success");
   }
 
   deleteTechnician(index) {
     if (this.technicians.length <= 1) {
-      alert("Debes mantener al menos un técnico registrado.");
+      this.showToast("⚠️ Debes mantener al menos un técnico registrado.", "warning");
       return;
     }
     const removed = this.technicians.splice(index, 1);
@@ -197,12 +197,12 @@ class CompukitApp {
     if (!input) return;
     const val = input.value.trim();
     if (!val) {
-      alert("Por favor escribe el nombre del servicio o tipo de equipo.");
+      this.showToast("⚠️ Por favor escribe el nombre del servicio.", "warning");
       return;
     }
 
     if (this.services.includes(val)) {
-      alert("Este servicio ya se encuentra en la lista.");
+      this.showToast("⚠️ Este servicio ya se encuentra en la lista.", "warning");
       return;
     }
 
@@ -211,12 +211,12 @@ class CompukitApp {
     input.value = "";
     this.renderServiceChips();
     this.renderCustomServicesManager();
-    alert(`✅ Servicio añadido: "${val}"`);
+    this.showToast(`✅ Servicio añadido: "${val}"`, "success");
   }
 
   deleteCustomService(index) {
     if (this.services.length <= 1) {
-      alert("Debes mantener al menos un servicio registrado.");
+      this.showToast("⚠️ Debes mantener al menos un servicio registrado.", "warning");
       return;
     }
     const removed = this.services.splice(index, 1);
@@ -329,7 +329,7 @@ class CompukitApp {
         const name = document.getElementById("client-name").value.trim();
         const phone = document.getElementById("client-phone").value.trim();
         if (!name || !phone) {
-          alert("⚠️ Por favor ingresa el Nombre y el Teléfono del cliente.");
+          this.showToast("⚠️ Ingresa el Nombre y el Teléfono del cliente para continuar.", "warning");
           return;
         }
       }
@@ -517,7 +517,7 @@ class CompukitApp {
     const advance = parseFloat(document.getElementById("cost-advance").value) || 0;
 
     if (!name || !phone) {
-      alert("⚠️ El nombre y el teléfono son requeridos.");
+      this.showToast("⚠️ El nombre y el teléfono del cliente son requeridos.", "warning");
       this.nextStep(1);
       return;
     }
@@ -555,7 +555,7 @@ class CompukitApp {
     // 2. Encolar para sincronización
     this.queueSync(orderObj);
 
-    alert(`✅ ¡Equipo registrado!\nN° Orden: ${orderId}\nGuardado localmente y sincronizándose...`);
+    this.showToast(`✅ ¡Equipo ${orderId} guardado exitosamente!`, "success");
 
     // Resetear formulario
     document.getElementById("form-ingreso").reset();
@@ -639,7 +639,7 @@ class CompukitApp {
     this.closeModal("modal-status");
     this.renderEquipmentList();
     this.renderStats();
-    alert(`✅ Estado actualizado: ${newStatus}\n${newStatus === 'Entregado' ? `💵 Cobrado hoy: $${finalPayment.toFixed(2)} | Saldo pendiente: $${order.Saldo_Pendiente.toFixed(2)}` : ''}`);
+    this.showToast(`✅ Estado actualizado: ${newStatus}${newStatus === 'Entregado' ? ` (Cobrado: $${finalPayment.toFixed(2)})` : ''}`, "success");
   }
 
   /* ==========================================
@@ -914,7 +914,7 @@ class CompukitApp {
     const resEl = document.getElementById("config-test-result");
 
     if (!input) {
-      alert("Por favor ingresa la URL de la Aplicación Web de Apps Script.");
+      this.showToast("⚠️ Por favor ingresa la URL de Apps Script.", "warning");
       return;
     }
 
@@ -1249,7 +1249,7 @@ class CompukitApp {
 
   downloadPDFTicket() {
     if (!window.jspdf) {
-      alert("Generador PDF cargando...");
+      this.showToast("⏳ El generador de PDF se está cargando...", "info");
       return;
     }
     const { jsPDF } = window.jspdf;
@@ -1351,6 +1351,75 @@ class CompukitApp {
     return String(str || "").replace(/[&<>"']/g, function (m) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
     });
+  }
+
+  /* ==========================================
+     NOTIFICACIONES FLOTANTES (TOAST)
+     ========================================== */
+  showToast(message, type = "success", duration = 3200) {
+    let container = document.getElementById("toast-container");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "toast-container";
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement("div");
+    toast.className = `toast-msg ${type}`;
+    const formatted = this.escapeHTML(message).replace(/\n/g, "<br>");
+    toast.innerHTML = `<span>${formatted}</span>`;
+    
+    toast.onclick = () => {
+      toast.classList.add("toast-hide");
+      setTimeout(() => toast.remove(), 300);
+    };
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.classList.add("toast-hide");
+        setTimeout(() => toast.remove(), 300);
+      }
+    }, duration);
+  }
+
+  /* ==========================================
+     MANTENIMIENTO, CACHÉ Y RESET LOCAL
+     ========================================== */
+  async clearAppCache() {
+    try {
+      this.showToast("🚀 Limpiando caché y actualizando archivos...", "info", 2000);
+      if ('caches' in window) {
+        const cacheKeys = await caches.keys();
+        await Promise.all(cacheKeys.map(key => caches.delete(key)));
+      }
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (let reg of registrations) {
+          await reg.unregister();
+        }
+      }
+      setTimeout(() => {
+        window.location.reload();
+      }, 700);
+    } catch (e) {
+      console.error("Error al limpiar caché:", e);
+      window.location.reload();
+    }
+  }
+
+  resetAppStorage() {
+    const confirmReset = confirm("⚠️ ¿Estás seguro de restablecer los datos guardados en este navegador?\n\n(Tus datos en Google Sheets y Google Drive NO se borrarán).");
+    if (!confirmReset) return;
+
+    localStorage.removeItem("compukit_orders");
+    localStorage.removeItem("compukit_cashflow");
+    localStorage.removeItem("compukit_sync_queue");
+    this.showToast("🔄 Datos locales restablecidos. Recargando...", "warning", 2000);
+    setTimeout(() => {
+      window.location.reload();
+    }, 900);
   }
 }
 
