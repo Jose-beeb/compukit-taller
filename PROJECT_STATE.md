@@ -66,6 +66,13 @@ Compukit/
 | 5 | `Monto` | Número | Valor monetario |
 | 6 | `Metodo_Pago` | Texto | `Efectivo` o `Transferencia` |
 
+### Pestaña 3: `Configuracion_Taller`
+| Columna N° | Nombre Exacto de Columna | Tipo | Descripción |
+|---|---|---|---|
+| 1 | `Clave` | Texto | Identificador del ajuste (ej: `tecnicos`) |
+| 2 | `Valor_JSON` | Texto/JSON | Valor serializado en JSON (ej: `["Principal", "Carlos"]`) |
+| 3 | `Ultima_Actualizacion` | Texto/Fecha | Timestamp de última modificación |
+
 ---
 
 ## ♿ Convenciones de Accesibilidad y Código (+50 Años)
@@ -77,7 +84,8 @@ Compukit/
 ---
 
 ## 🚦 Estado Actual de las Tareas
-- [x] Backend `Code.gs` actualizado con subida a Drive, pestañas `Órdenes` y `Flujo_Caja`, y `doPost` bidireccional.
-- [x] Frontend `app.js` actualizado con compresión Canvas (1024px JPEG 0.7), `redirect: "follow"` + `text/plain`, y cola offline resiliente.
-- [x] Actualización de `PROJECT_STATE.md` con el nuevo esquema de 2 pestañas.
+- [x] Backend `Code.gs` actualizado con subida a Drive, 3 pestañas (`Órdenes`, `Flujo_Caja`, `Configuracion_Taller`), y `doPost` bidireccional.
+- [x] Frontend `app.js` actualizado con compresión Canvas (1024px JPEG 0.7), `redirect: "follow"` + `text/plain`, cola offline resiliente y gestión de técnicos sincronizados.
+- [x] Actualización de `PROJECT_STATE.md` con el esquema completo de 3 pestañas.
 - [x] Gestión de Servicios y Equipos Editables (ej: *Impresión de Planos*, *Mantenimiento Preventivo*, etc.) con persistencia en `localStorage`.
+- [x] Documentación y manuales (`MANUAL_USUARIO.md`, `PROMPT_CANVA_MANUAL_VISUAL.md`, `PROJECT_STATE.md`, `AGENTS.md`) completamente sincronizados y verificados.

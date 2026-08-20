@@ -1,92 +1,127 @@
 /**
  * Compukit - Backend Google Apps Script para Gestión de Taller de Reparación
- * Con soporte para subida de fotos a Google Drive, 2 pestañas (Órdenes y Flujo_Caja),
- * actualización bidireccional y manejo de peticiones CORS/Redirects.
+ * Con soporte para subida de fotos a Google Drive, 3 pestañas (Órdenes, Flujo_Caja, Configuracion_Taller),
+ * mapeo dinámico de columnas, actualización bidireccional y manejo de peticiones CORS/Redirects.
  * 
  * INSTRUCCIONES DE INSTALACIÓN:
  * 1. En tu Hoja de Cálculo de Google Sheets, ve a: Extensiones -> Apps Script.
  * 2. Pega este archivo completo borrando lo que haya.
  * 3. Haz clic en "Guardar" (💾).
- * 4. Haz clic en "Desplegar" -> "Nuevo despliegue" -> Tipo: "Aplicación web".
+ * 4. Haz clic en "Implementar" -> "Nueva implementación" (o "Administrar implementaciones" -> "Editar" -> "Nueva versión").
+ *    - Tipo: "Aplicación web"
  *    - Ejecutar como: "Yo"
  *    - Quién tiene acceso: "Cualquier persona" (Anyone)
- * 5. Copia la URL de la aplicación web y pégala en la pestaña Config de la app móvil.
+ * 5. Copia la URL de la aplicación web (terminada en /exec) y pégala en la pestaña Config de la app.
  */
 
 const SHEET_ORDERS = "Órdenes";
 const SHEET_CASHFLOW = "Flujo_Caja";
+const SHEET_CONFIG = "Configuracion_Taller";
 const FOLDER_NAME = "Compukit_Fotos_Taller";
+
+const HEADERS_ORDERS = [
+  "ID_Orden",
+  "Fecha_Ingreso",
+  "Cliente",
+  "Telefono",
+  "Tipo_Equipo",
+  "Marca_Modelo",
+  "Accesorios",
+  "Falla_Reportada",
+  "Fotos_Drive_URL",
+  "Estado",
+  "Trabajo_Realizado",
+  "Tecnico_Responsable",
+  "Costo_Total",
+  "Abono",
+  "Saldo_Pendiente",
+  "Fecha_Entrega",
+  "Ultima_Actualizacion"
+];
+
+const HEADERS_CASHFLOW = [
+  "Fecha",
+  "ID_Orden",
+  "Concepto",
+  "Tipo", // Ingreso / Gasto
+  "Monto",
+  "Metodo_Pago" // Efectivo / Transferencia
+];
+
+const HEADERS_CONFIG = [
+  "Clave",
+  "Valor_JSON",
+  "Ultima_Actualizacion"
+];
+
+// Obtener Spreadsheet activa o buscar por ID configurado
+function getSpreadsheet() {
+  let ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    const propId = PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID");
+    if (propId) {
+      ss = SpreadsheetApp.openById(propId);
+    }
+  }
+  if (!ss) {
+    throw new Error("No se pudo acceder a la Hoja de Cálculo. Asegúrate de abrir Apps Script desde tu Google Sheet (Extensiones > Apps Script).");
+  }
+  return ss;
+}
 
 // Obtener o crear carpeta en Google Drive para almacenar fotos
 function getOrCreatePhotosFolder() {
-  const folders = DriveApp.getFoldersByName(FOLDER_NAME);
-  if (folders.hasNext()) {
-    return folders.next();
+  try {
+    const folders = DriveApp.getFoldersByName(FOLDER_NAME);
+    if (folders.hasNext()) {
+      return folders.next();
+    }
+    const newFolder = DriveApp.createFolder(FOLDER_NAME);
+    newFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return newFolder;
+  } catch (err) {
+    Logger.log("Aviso al acceder a Drive: " + err.toString());
+    return null;
   }
-  const newFolder = DriveApp.createFolder(FOLDER_NAME);
-  newFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  return newFolder;
 }
 
-// Obtener o inicializar las hojas con sus encabezados
+// Inicializar o verificar las hojas y sus encabezados
 function initSheets() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSpreadsheet();
   
   // 1. Hoja de Órdenes
   let sheetOrders = ss.getSheetByName(SHEET_ORDERS);
   if (!sheetOrders) {
     sheetOrders = ss.insertSheet(SHEET_ORDERS);
-    const headersOrders = [
-      "ID_Orden",
-      "Fecha_Ingreso",
-      "Cliente",
-      "Telefono",
-      "Tipo_Equipo",
-      "Marca_Modelo",
-      "Accesorios",
-      "Falla_Reportada",
-      "Fotos_Drive_URL",
-      "Estado",
-      "Trabajo_Realizado",
-      "Tecnico_Responsable",
-      "Costo_Total",
-      "Abono",
-      "Saldo_Pendiente",
-      "Fecha_Entrega",
-      "Ultima_Actualizacion"
-    ];
-    sheetOrders.getRange(1, 1, 1, headersOrders.length).setValues([headersOrders]);
-    sheetOrders.getRange(1, 1, 1, headersOrders.length).setFontWeight("bold").setBackground("#1a365d").setFontColor("#ffffff");
+    sheetOrders.getRange(1, 1, 1, HEADERS_ORDERS.length).setValues([HEADERS_ORDERS]);
+    sheetOrders.getRange(1, 1, 1, HEADERS_ORDERS.length).setFontWeight("bold").setBackground("#1a365d").setFontColor("#ffffff");
     sheetOrders.setFrozenRows(1);
+  } else {
+    // Si la hoja ya existía, asegurar que tenga todas las columnas requeridas (ej: Tecnico_Responsable)
+    const existingCols = sheetOrders.getLastColumn();
+    if (existingCols < HEADERS_ORDERS.length) {
+      sheetOrders.getRange(1, 1, 1, HEADERS_ORDERS.length).setValues([HEADERS_ORDERS]);
+      sheetOrders.getRange(1, 1, 1, HEADERS_ORDERS.length).setFontWeight("bold").setBackground("#1a365d").setFontColor("#ffffff");
+      sheetOrders.setFrozenRows(1);
+    }
   }
 
   // 2. Hoja de Flujo de Caja
   let sheetCash = ss.getSheetByName(SHEET_CASHFLOW);
   if (!sheetCash) {
     sheetCash = ss.insertSheet(SHEET_CASHFLOW);
-    const headersCash = [
-      "Fecha",
-      "ID_Orden",
-      "Concepto",
-      "Tipo", // Ingreso / Gasto
-      "Monto",
-      "Metodo_Pago" // Efectivo / Transferencia
-    ];
-    sheetCash.getRange(1, 1, 1, headersCash.length).setValues([headersCash]);
-    sheetCash.getRange(1, 1, 1, headersCash.length).setFontWeight("bold").setBackground("#065f46").setFontColor("#ffffff");
+    sheetCash.getRange(1, 1, 1, HEADERS_CASHFLOW.length).setValues([HEADERS_CASHFLOW]);
+    sheetCash.getRange(1, 1, 1, HEADERS_CASHFLOW.length).setFontWeight("bold").setBackground("#065f46").setFontColor("#ffffff");
     sheetCash.setFrozenRows(1);
   }
 
-// 3. Hoja de Configuración (Técnicos, etc.)
-  let sheetConfig = ss.getSheetByName("Configuracion_Taller");
+  // 3. Hoja de Configuración
+  let sheetConfig = ss.getSheetByName(SHEET_CONFIG);
   if (!sheetConfig) {
-    sheetConfig = ss.insertSheet("Configuracion_Taller");
-    const headersConfig = ["Clave", "Valor_JSON", "Ultima_Actualizacion"];
-    sheetConfig.getRange(1, 1, 1, headersConfig.length).setValues([headersConfig]);
-    sheetConfig.getRange(1, 1, 1, headersConfig.length).setFontWeight("bold").setBackground("#374151").setFontColor("#ffffff");
+    sheetConfig = ss.insertSheet(SHEET_CONFIG);
+    sheetConfig.getRange(1, 1, 1, HEADERS_CONFIG.length).setValues([HEADERS_CONFIG]);
+    sheetConfig.getRange(1, 1, 1, HEADERS_CONFIG.length).setFontWeight("bold").setBackground("#374151").setFontColor("#ffffff");
     sheetConfig.setFrozenRows(1);
-    
-    // Valores por defecto
     sheetConfig.appendRow(["tecnicos", JSON.stringify(["Principal", "Técnico 1"]), new Date()]);
   }
 
@@ -100,7 +135,10 @@ function doGet(e) {
     const action = (e && e.parameter && e.parameter.action) || "read";
 
     if (action === "test") {
-      return responseJSON({ status: "success", message: "Conexión exitosa con Google Sheets & Drive (Compukit Backend Activo)" });
+      return responseJSON({
+        status: "success",
+        message: "Conexión exitosa con Google Sheets & Drive (Compukit Backend Activo)"
+      });
     }
 
     // Leer Órdenes
@@ -117,7 +155,10 @@ function doGet(e) {
           if (val instanceof Date) {
             val = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
           }
-          record[h] = val;
+          if (h === "Costo_Total" || h === "Abono" || h === "Saldo_Pendiente") {
+            val = parseFloat(val) || 0;
+          }
+          record[h] = val !== undefined ? val : "";
         });
         orders.push(record);
       }
@@ -137,7 +178,10 @@ function doGet(e) {
           if (val instanceof Date) {
             val = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
           }
-          item[h] = val;
+          if (h === "Monto") {
+            val = parseFloat(val) || 0;
+          }
+          item[h] = val !== undefined ? val : "";
         });
         cashFlow.push(item);
       }
@@ -151,7 +195,7 @@ function doGet(e) {
         if (dataCfg[i][0] === "tecnicos") {
           try {
             technicians = JSON.parse(dataCfg[i][1]);
-          } catch(e) {}
+          } catch(err) {}
           break;
         }
       }
@@ -172,10 +216,12 @@ function doGet(e) {
 // Guardar foto Base64 en Google Drive y retornar link público
 function saveBase64ImageToDrive(base64Data, filename) {
   try {
-    if (!base64Data || !base64Data.includes("base64,")) {
+    if (!base64Data || typeof base64Data !== "string" || !base64Data.includes("base64,")) {
       return "";
     }
     const folder = getOrCreatePhotosFolder();
+    if (!folder) return "";
+
     const splitData = base64Data.split("base64,");
     const contentType = splitData[0].split(":")[1].split(";")[0];
     const bytes = Utilities.base64Decode(splitData[1]);
@@ -184,7 +230,8 @@ function saveBase64ImageToDrive(base64Data, filename) {
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     return file.getUrl();
   } catch (err) {
-    return "Error al guardar foto: " + err.toString();
+    Logger.log("Error al guardar foto: " + err.toString());
+    return "";
   }
 }
 
@@ -193,14 +240,22 @@ function doPost(e) {
   try {
     let payload;
     if (e && e.postData && e.postData.contents) {
-      payload = JSON.parse(e.postData.contents);
+      try {
+        payload = JSON.parse(e.postData.contents);
+      } catch (jsonErr) {
+        payload = e.parameter;
+      }
     } else if (e && e.parameter) {
       payload = e.parameter;
     } else {
-      return responseJSON({ status: "error", message: "Sin datos recibidos" });
+      return responseJSON({ status: "error", message: "Sin datos recibidos en la petición POST" });
     }
 
-    const { sheetOrders, sheetCash } = initSheets();
+    if (!payload) {
+      return responseJSON({ status: "error", message: "El cuerpo de la petición está vacío" });
+    }
+
+    const { sheetOrders, sheetCash, sheetConfig } = initSheets();
     const action = payload.action || "create";
     const nowStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
 
@@ -216,27 +271,32 @@ function doPost(e) {
 
       const total = parseFloat(payload.Costo_Total) || 0;
       const abono = parseFloat(payload.Abono) || 0;
-      const saldo = total - abono;
+      const saldo = Math.max(0, total - abono);
 
-      const newOrderRow = [
-        orderId,
-        payload.Fecha_Ingreso || nowStr,
-        payload.Cliente || "",
-        payload.Telefono || "",
-        payload.Tipo_Equipo || "Computadora",
-        payload.Marca_Modelo || "",
-        payload.Accesorios || "Ninguno",
-        payload.Falla_Reportada || "",
-        photoUrl,
-        payload.Estado || "Recibido",
-        payload.Trabajo_Realizado || "",
-        payload.Tecnico_Responsable || "Principal",
-        total,
-        abono,
-        saldo,
-        payload.Fecha_Entrega || "",
-        nowStr
-      ];
+      // Obtener encabezados actuales para mapeo dinámico exacto
+      const headers = sheetOrders.getRange(1, 1, 1, Math.max(sheetOrders.getLastColumn(), HEADERS_ORDERS.length)).getValues()[0];
+      const newOrderRow = headers.map(h => {
+        switch (h) {
+          case "ID_Orden": return orderId;
+          case "Fecha_Ingreso": return payload.Fecha_Ingreso || nowStr;
+          case "Cliente": return payload.Cliente || "";
+          case "Telefono": return payload.Telefono || "";
+          case "Tipo_Equipo": return payload.Tipo_Equipo || "Computadora";
+          case "Marca_Modelo": return payload.Marca_Modelo || "";
+          case "Accesorios": return payload.Accesorios || "Ninguno";
+          case "Falla_Reportada": return payload.Falla_Reportada || "";
+          case "Fotos_Drive_URL": return photoUrl;
+          case "Estado": return payload.Estado || "Recibido";
+          case "Trabajo_Realizado": return payload.Trabajo_Realizado || "";
+          case "Tecnico_Responsable": return payload.Tecnico_Responsable || "Principal";
+          case "Costo_Total": return total;
+          case "Abono": return abono;
+          case "Saldo_Pendiente": return saldo;
+          case "Fecha_Entrega": return payload.Fecha_Entrega || "";
+          case "Ultima_Actualizacion": return nowStr;
+          default: return payload[h] !== undefined ? payload[h] : "";
+        }
+      });
 
       sheetOrders.appendRow(newOrderRow);
 
@@ -245,7 +305,7 @@ function doPost(e) {
         const cashRow = [
           nowStr,
           orderId,
-          "Abono inicial de reparación (" + (payload.Cliente || "") + ")",
+          "Abono inicial (" + (payload.Cliente || "") + ")",
           "Ingreso",
           abono,
           payload.Metodo_Pago || "Efectivo"
@@ -272,19 +332,18 @@ function doPost(e) {
       let rowIndex = -1;
 
       for (let i = 1; i < data.length; i++) {
-        if (data[i][0] == orderId) {
+        if (String(data[i][0]).trim().toLowerCase() === String(orderId).trim().toLowerCase()) {
           rowIndex = i + 1; // Fila en Sheets (1-based index)
           break;
         }
       }
 
       if (rowIndex === -1) {
-        return responseJSON({ status: "error", message: "Orden no encontrada: " + orderId });
+        return responseJSON({ status: "error", message: "Orden no encontrada en Google Sheets: " + orderId });
       }
 
       const headers = data[0];
       
-      // Actualizar campos enviados
       if (payload.Estado) {
         const col = headers.indexOf("Estado");
         if (col !== -1) sheetOrders.getRange(rowIndex, col + 1).setValue(payload.Estado);
@@ -301,25 +360,26 @@ function doPost(e) {
         const col = headers.indexOf("Tecnico_Responsable");
         if (col !== -1) sheetOrders.getRange(rowIndex, col + 1).setValue(payload.Tecnico_Responsable);
       }
-      let currentTotal = parseFloat(data[rowIndex - 1][headers.indexOf("Costo_Total")]) || 0;
-      let currentAbono = parseFloat(data[rowIndex - 1][headers.indexOf("Abono")]) || 0;
+
+      const costCol = headers.indexOf("Costo_Total");
+      const abonoCol = headers.indexOf("Abono");
+      let currentTotal = costCol !== -1 ? (parseFloat(data[rowIndex - 1][costCol]) || 0) : 0;
+      let currentAbono = abonoCol !== -1 ? (parseFloat(data[rowIndex - 1][abonoCol]) || 0) : 0;
 
       if (payload.Costo_Total !== undefined) {
         currentTotal = parseFloat(payload.Costo_Total) || 0;
-        const col = headers.indexOf("Costo_Total");
-        if (col !== -1) sheetOrders.getRange(rowIndex, col + 1).setValue(currentTotal);
+        if (costCol !== -1) sheetOrders.getRange(rowIndex, costCol + 1).setValue(currentTotal);
       }
 
       if (payload.Abono !== undefined) {
         currentAbono = parseFloat(payload.Abono) || 0;
-        const col = headers.indexOf("Abono");
-        if (col !== -1) sheetOrders.getRange(rowIndex, col + 1).setValue(currentAbono);
+        if (abonoCol !== -1) sheetOrders.getRange(rowIndex, abonoCol + 1).setValue(currentAbono);
       }
 
       // Recalcular Saldo_Pendiente automáticamente
       const saldoCol = headers.indexOf("Saldo_Pendiente");
       if (saldoCol !== -1) {
-        sheetOrders.getRange(rowIndex, saldoCol + 1).setValue(currentTotal - currentAbono);
+        sheetOrders.getRange(rowIndex, saldoCol + 1).setValue(Math.max(0, currentTotal - currentAbono));
       }
 
       if (payload.Estado === "Entregado") {
@@ -333,7 +393,7 @@ function doPost(e) {
           const cashRow = [
             nowStr,
             orderId,
-            "Cobro final entrega de equipo (" + (payload.Cliente || orderId) + ")",
+            "Cobro final entrega (" + (payload.Cliente || orderId) + ")",
             "Ingreso",
             paymentAmount,
             payload.Metodo_Pago || "Efectivo"
@@ -387,3 +447,4 @@ function responseJSON(obj) {
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
 }
+

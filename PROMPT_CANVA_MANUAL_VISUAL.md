@@ -56,7 +56,7 @@ ESTRUCTURA DE CONTENIDO VISUAL (DIAPOSITIVA POR DIAPOSITIVA):
   • ✅ Opción A - Todo Cobrado: El cliente paga el 100% del saldo (Saldo: $0.00).
   • ⚠️ Opción B - Cobro Parcial: El cliente abona una parte hoy y el sistema calcula la diferencia pendiente.
   • ⏳ Opción C - A Crédito / Sin Cobro: Se entrega el equipo y queda el saldo pendiente para cobrar después.
-- Nota: Puedes generar e imprimir el comprobante térmico tocando "📄 Ticket PDF".
+- Nota: Puedes generar y descargar el comprobante en PDF tocando "📄 Ticket PDF" y luego "📥 Descargar Comprobante en PDF".
 
 ----------------------------------------------------------------------
 📑 SECCIÓN 5: PREGUNTAS RÁPIDAS Y TIPS DEL TALLER

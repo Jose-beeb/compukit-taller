@@ -11,7 +11,7 @@ class CompukitApp {
     this.orders = JSON.parse(localStorage.getItem("compukit_orders") || "[]");
     this.cashFlow = JSON.parse(localStorage.getItem("compukit_cashflow") || "[]");
     this.syncQueue = JSON.parse(localStorage.getItem("compukit_sync_queue") || "[]");
-    
+
     const defaultServices = [
       "💻 Laptop / Portátil",
       "🖥️ PC de Escritorio",
@@ -277,7 +277,7 @@ class CompukitApp {
 
   toggleAccessoryChip(btn, accessoryName) {
     if (!btn) return;
-    
+
     // Si selecciona "Sin Accesorios", deseleccionar los demás y ocultar input de "Otro"
     if (accessoryName === 'Sin Accesorios' || (btn.textContent && btn.textContent.includes('Ninguno'))) {
       const isSelected = btn.classList.contains('selected');
@@ -522,7 +522,7 @@ class CompukitApp {
       return;
     }
 
-    const orderId = "CK-" + Math.floor(100000 + Math.random() * 900000);
+    const orderId = "CK-" + Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
     const nowStr = new Date().toLocaleString("es-ES");
 
     const orderObj = {
@@ -565,7 +565,12 @@ class CompukitApp {
     this.nextStep(1);
 
     // Ir a la pestaña del Taller
-    this.switchView('view-taller', document.querySelectorAll('.nav-item')[1]);
+    const navItems = document.querySelectorAll('.nav-item');
+      if (navItems.length > 1) {
+        this.switchView('view-taller', navItems[1]);
+      } else {
+        this.switchView('view-taller');
+      }
   }
 
   saveStatusUpdate() {
@@ -590,7 +595,7 @@ class CompukitApp {
       order.Fecha_Entrega = nowStr;
       const paymentType = document.getElementById("update-payment-type")?.value || "FULL";
       const deliveryPaidInput = parseFloat(document.getElementById("delivery-amount-paid")?.value) || 0;
-      
+
       if (paymentType === "FULL") {
         // Se cobró el saldo completo restante
         finalPayment = Math.max(0, totalCost - initialAdvance);
@@ -696,7 +701,7 @@ class CompukitApp {
       pendingAfterDelivery = Math.max(0, totalCost - advance);
     }
 
-    preview.innerHTML = pendingAfterDelivery > 0 
+    preview.innerHTML = pendingAfterDelivery > 0
       ? `⚠️ Saldo que quedará pendiente por cobrar: <span style="color: var(--danger); font-size: 1.15rem;">$${pendingAfterDelivery.toFixed(2)}</span>`
       : `✅ ¡Todo pagado! Saldo restante: <span style="color: var(--success); font-size: 1.15rem;">$0.00</span>`;
   }
@@ -716,59 +721,142 @@ class CompukitApp {
       return;
     }
 
+    if (this._isSyncingQueue) return;
+    this._isSyncingQueue = true;
     this.updateSyncBadge("syncing");
 
-    while (this.syncQueue.length > 0) {
-      const item = this.syncQueue[0];
-      try {
-        // Enviar con text/plain y redirect: "follow" para evitar bloqueo CORS y manejar 302
-        const response = await fetch(this.sheetsUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "text/plain;charset=utf-8"
-          },
-          body: JSON.stringify(item),
-          redirect: "follow"
-        });
+    try {
+      while (this.syncQueue.length > 0) {
+        const item = this.syncQueue[0];
+        try {
+          const cleanUrl = this.sheetsUrl.trim();
+          const response = await fetch(cleanUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "text/plain;charset=utf-8"
+            },
+            body: JSON.stringify(item),
+            redirect: "follow"
+          });
 
-        const result = await response.json();
-        if (result.status === "success") {
-          // Marcar orden local como sincronizada
-          const localOrder = this.orders.find(o => o.ID_Orden === (item.ID_Orden || result.orderId));
-          if (localOrder) {
-            localOrder._sync_status = "Sincronizado";
-            if (result.photoUrl) localOrder.Fotos_Drive_URL = result.photoUrl;
+          if (!response.ok) {
+            throw new Error(`HTTP Error ${response.status}`);
           }
-          this.syncQueue.shift(); // Quitar de la cola
-          this.saveQueueLocal();
-          this.saveOrdersLocal();
-        } else {
-          console.warn("Respuesta de error en Apps Script:", result);
+
+          const rawText = await response.text();
+          let result;
+          try {
+            result = JSON.parse(rawText);
+          } catch(e) {
+            throw new Error("Respuesta del servidor no es JSON: " + rawText.substring(0, 80));
+          }
+
+          if (result.status === "success") {
+            // Marcar orden local como sincronizada
+            const targetId = item.ID_Orden || result.orderId;
+            const localOrder = this.orders.find(o => o.ID_Orden === targetId);
+            if (localOrder) {
+              localOrder._sync_status = "Sincronizado";
+              if (result.photoUrl) localOrder.Fotos_Drive_URL = result.photoUrl;
+            }
+            this.syncQueue.shift(); // Quitar elemento procesado
+            this.saveQueueLocal();
+            this.saveOrdersLocal();
+          } else {
+            console.warn("Aviso recibido de Google Apps Script:", result);
+            item._retry_count = (item._retry_count || 0) + 1;
+            if (item._retry_count >= 3) {
+              console.error("Descartando elemento no sincronizable tras 3 intentos:", item, result.message);
+              this.syncQueue.shift();
+              this.saveQueueLocal();
+            } else {
+              break;
+            }
+          }
+        } catch (err) {
+          console.warn("Fallo temporal de conexión al sincronizar con Apps Script (reintentará):", err);
           break;
         }
-      } catch (err) {
-        console.warn("Fallo de red al sincronizar con Apps Script (reintentará luego):", err);
-        break;
       }
+    } finally {
+      this._isSyncingQueue = false;
+      this.updateSyncBadge();
+      this.renderEquipmentList();
+      this.renderStats();
     }
-
-    this.updateSyncBadge();
-    this.renderEquipmentList();
-    this.renderStats();
   }
 
-  async fetchFromSheets() {
-    if (!this.sheetsUrl || !navigator.onLine) return;
+  mergeRemoteOrders(remoteOrders) {
+    if (!Array.isArray(remoteOrders)) return;
+
+    const remoteList = remoteOrders.slice().reverse().map(o => ({
+      ...o,
+      Costo_Total: parseFloat(o.Costo_Total) || 0,
+      Abono: parseFloat(o.Abono) || 0,
+      Saldo_Pendiente: parseFloat(o.Saldo_Pendiente) || 0,
+      _sync_status: "Sincronizado"
+    }));
+
+    // Preservar órdenes locales creadas u offline que estén pendientes de subida
+    const pendingLocalOrders = this.orders.filter(local => local._sync_status === "Pendiente");
+
+    const mergedMap = new Map();
+    remoteList.forEach(order => {
+      if (order.ID_Orden) mergedMap.set(order.ID_Orden, order);
+    });
+
+    // Sobreescribir con las locales pendientes para no perder cambios recientes
+    pendingLocalOrders.forEach(local => {
+      if (local.ID_Orden) mergedMap.set(local.ID_Orden, local);
+    });
+
+    this.orders = Array.from(mergedMap.values()).sort((a, b) => {
+      const dateA = new Date(a.Fecha_Ingreso || 0).getTime() || 0;
+      const dateB = new Date(b.Fecha_Ingreso || 0).getTime() || 0;
+      return dateB - dateA;
+    });
+
+    this.saveOrdersLocal();
+  }
+
+  async fetchFromSheets(isManualTest = false) {
+    if (!this.sheetsUrl || !navigator.onLine) {
+      if (!this.sheetsUrl && isManualTest) {
+        const resEl = document.getElementById("config-test-result");
+        if (resEl) resEl.innerHTML = `<span style="color: var(--danger);">⚠️ Ingresa una URL válida de Apps Script.</span>`;
+      }
+      return;
+    }
+
+    const resEl = document.getElementById("config-test-result");
     try {
       this.updateSyncBadge("syncing");
-      const resp = await fetch(`${this.sheetsUrl}?action=read`, { redirect: "follow" });
-      const data = await resp.json();
+      if (resEl && isManualTest) {
+        resEl.innerHTML = `<span style="color: var(--primary);">⏳ Conectando con Google Sheets y Apps Script...</span>`;
+      }
+
+      const cleanUrl = this.sheetsUrl.trim();
+      const testUrl = cleanUrl.includes("?") ? `${cleanUrl}&action=read` : `${cleanUrl}?action=read`;
+      const resp = await fetch(testUrl, { redirect: "follow" });
+
+      if (!resp.ok) {
+        throw new Error(`Error de servidor HTTP ${resp.status}`);
+      }
+
+      const rawText = await resp.text();
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (parseErr) {
+        if (rawText.includes("<!DOCTYPE") || rawText.includes("<html")) {
+          throw new Error("Google devolvió una página HTML en lugar de datos JSON. Asegúrate de configurar en Apps Script: Desplegar > Aplicación web > Quién tiene acceso: 'Cualquier persona' (Anyone).");
+        }
+        throw new Error("Respuesta no válida del servidor: " + rawText.substring(0, 90));
+      }
 
       if (data.status === "success") {
-        if (Array.isArray(data.orders) && data.orders.length > 0) {
-          // Fusionar con datos locales respetando elementos pendientes de sincronización
-          this.orders = data.orders.reverse().map(o => ({ ...o, _sync_status: "Sincronizado" }));
-          this.saveOrdersLocal();
+        if (Array.isArray(data.orders)) {
+          this.mergeRemoteOrders(data.orders);
         }
         if (Array.isArray(data.cashFlow)) {
           this.cashFlow = data.cashFlow;
@@ -786,13 +874,24 @@ class CompukitApp {
           this.renderTechniciansManager();
         }
 
-        const resEl = document.getElementById("config-test-result");
-        if (resEl) resEl.innerHTML = `<span style="color: var(--success);">✅ Conexión Exitosa. Sincronizado con Google Sheets & Drive.</span>`;
+        if (resEl) {
+          const totalOrders = data.orders ? data.orders.length : 0;
+          resEl.innerHTML = `<span style="color: var(--success);">✅ Conexión Exitosa. Sincronizado con Google Sheets (${totalOrders} órdenes cargadas).</span>`;
+        }
+
         this.renderEquipmentList();
         this.renderStats();
+
+        // Procesar cualquier elemento en cola acumulado
+        this.processSyncQueue();
+      } else {
+        throw new Error(data.message || "Error devuelto por Apps Script.");
       }
     } catch (err) {
       console.warn("Error al consultar Google Sheets:", err);
+      if (resEl) {
+        resEl.innerHTML = `<span style="color: var(--danger);">❌ ${this.escapeHTML(err.message || err.toString())}</span>`;
+      }
     } finally {
       this.updateSyncBadge();
     }
@@ -811,15 +910,33 @@ class CompukitApp {
   }
 
   saveSheetsUrl() {
-    const input = document.getElementById("sheets-url-input").value.trim();
+    let input = (document.getElementById("sheets-url-input")?.value || "").trim();
+    const resEl = document.getElementById("config-test-result");
+
     if (!input) {
-      alert("Ingresa una URL válida de Apps Script.");
+      alert("Por favor ingresa la URL de la Aplicación Web de Apps Script.");
       return;
     }
+
+    // Corregir si el usuario pegó la URL de edición de Apps Script
+    if (input.includes("/edit")) {
+      input = input.replace(/\/edit.*$/, "/exec");
+      const urlInputEl = document.getElementById("sheets-url-input");
+      if (urlInputEl) urlInputEl.value = input;
+    }
+
+    // Validar si pegó la URL de Google Sheets en vez de Apps Script
+    if (input.includes("docs.google.com/spreadsheets")) {
+      if (resEl) {
+        resEl.innerHTML = `<span style="color: var(--danger);">⚠️ Has pegado el enlace de la hoja de Google Sheets. Debes pegar la URL de la Aplicación Web de Apps Script (terminada en <code>/exec</code>). Consulta la guía abajo.</span>`;
+      }
+      return;
+    }
+
     this.sheetsUrl = input;
     localStorage.setItem("compukit_sheets_url", input);
     this.updateSyncBadge();
-    this.fetchFromSheets();
+    this.fetchFromSheets(true);
   }
 
   updateSyncBadge(customState) {
@@ -878,7 +995,7 @@ class CompukitApp {
     const searchTerm = (document.getElementById("search-input")?.value || "").toLowerCase();
 
     let filtered = this.orders.filter(r => {
-      const matchSearch = 
+      const matchSearch =
         (r.Cliente || "").toLowerCase().includes(searchTerm) ||
         (r.Telefono || "").toLowerCase().includes(searchTerm) ||
         (r.Tipo_Equipo || "").toLowerCase().includes(searchTerm) ||
@@ -961,7 +1078,8 @@ class CompukitApp {
           </button>
         </div>
       </div>
-    `;}).join("");
+    `;
+    }).join("");
   }
 
   renderStats() {
@@ -1220,7 +1338,7 @@ class CompukitApp {
     doc.setDrawColor(100, 100, 100);
     doc.line(10, 148, 200, 148);
     doc.setFontSize(8);
-    doc.text("- - - - - - - - - - - - - - - - - - - CORTAR AQUI POR LA MITAD - - - - - - - - - - - - - - - - - - -", 105, 147, { align: "center" });
+    doc.text(" LINEA DE CORTE ", 105, 147, { align: "center" });
     doc.setLineDashPattern([], 0); // Restaurar línea sólida
 
     // COPIA 2: TALLER (Mitad Inferior)
@@ -1230,7 +1348,7 @@ class CompukitApp {
   }
 
   escapeHTML(str) {
-    return String(str || "").replace(/[&<>"']/g, function(m) {
+    return String(str || "").replace(/[&<>"']/g, function (m) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
     });
   }

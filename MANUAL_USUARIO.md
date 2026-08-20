@@ -100,8 +100,8 @@ Cuando el cliente viene a retirar el equipo:
 ---
 
 ### 📄 4. Comprobantes y Tickets
-- En la tarjeta del equipo, haz clic en **📄 Ticket PDF** para ver el comprobante formal.
-- Puedes descargarlo en PDF en formato ticket de 80mm o imprimirlo en tu impresora térmica/láser.
+- En la tarjeta del equipo, haz clic en **📄 Ticket PDF** para abrir la vista previa del comprobante.
+- Pulsa **📥 Descargar Comprobante en PDF** para guardar el archivo en tu dispositivo; una vez descargado, podrás abrirlo e imprimirlo con cualquier visor de PDF o impresora.
 
 ---
 

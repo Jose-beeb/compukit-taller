@@ -1,4 +1,4 @@
-const CACHE_NAME = "compukit-cache-v22";
+const CACHE_NAME = "compukit-cache-v23";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -27,10 +27,15 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Estrategia Network-First: Primero pide a la red para tener siempre la última versión fresca.
-// Si no hay internet (offline), responde inmediatamente con la copia en caché.
+// Estrategia Network-First para archivos locales.
+// Las peticiones a Google Apps Script y sus redirecciones NUNCA son cacheadas por el Service Worker.
 self.addEventListener("fetch", (event) => {
-  if (event.request.method === "GET" && !event.request.url.includes("script.google.com")) {
+  const url = event.request.url;
+  const isGoogleScript = url.includes("script.google.com") || 
+                         url.includes("googleusercontent.com") ||
+                         url.includes("script.google");
+
+  if (event.request.method === "GET" && !isGoogleScript) {
     event.respondWith(
       fetch(event.request)
         .then((networkResponse) => {
@@ -51,4 +56,5 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
 
