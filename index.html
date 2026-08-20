@@ -324,6 +324,19 @@
         </div>
       </div>
 
+      <!-- CLAVE DE ADMINISTRADOR (SEGURIDAD) -->
+      <div class="wizard-card" style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 8px;">🔒 Clave de Administrador (PIN)</h3>
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px;">
+          Protege acciones críticas como la eliminación permanente de registros y equipos del taller.
+        </p>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <input type="password" id="change-admin-pin-input" class="form-control" style="flex: 1; min-width: 160px; font-weight: bold;" placeholder="Nueva clave (ej: 1234)">
+          <button type="button" class="btn btn-primary" onclick="window.app && window.app.saveAdminPin()">💾 Guardar Clave</button>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px;">Clave predeterminada inicial: <code>1234</code></div>
+      </div>
+
       <div class="wizard-card" style="margin-bottom: 20px;">
         <h3 style="margin-bottom: 8px;">📊 Conexión Google Sheets</h3>
         <div class="form-group">
@@ -453,11 +466,38 @@
           </div>
         </div>
 
-        <div class="btn-group">
-          <button class="btn btn-secondary" onclick="window.app && window.app.closeModal('modal-status')">Cancelar</button>
-          <button class="btn btn-success" onclick="window.app && window.app.saveStatusUpdate()">💾 Guardar Cambios</button>
+        <div class="btn-group" style="display: flex; gap: 8px; justify-content: space-between; align-items: center; margin-top: 16px;">
+          <button type="button" class="btn btn-secondary btn-sm" style="color: var(--danger); border-color: var(--danger); font-size: 0.9rem;" onclick="window.app && window.app.requestDeleteOrder()">
+            🗑️ Eliminar Orden
+          </button>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn btn-secondary" onclick="window.app && window.app.closeModal('modal-status')">Cancelar</button>
+            <button type="button" class="btn btn-success" onclick="window.app && window.app.saveStatusUpdate()">💾 Guardar Cambios</button>
+          </div>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: AUTORIZACIÓN DE ADMINISTRADOR (ELIMINAR ORDEN) -->
+  <div id="modal-admin-auth" class="modal-overlay" onclick="if(event.target === this) window.app && window.app.closeModal('modal-admin-auth')">
+    <div class="modal-card" style="max-width: 440px; text-align: center; border-top: 5px solid var(--danger);">
+      <div class="modal-header">
+        <h3 class="modal-title" style="color: var(--danger);">🔒 Clave de Administrador</h3>
+        <button class="icon-btn" onclick="window.app && window.app.closeModal('modal-admin-auth')">✖️</button>
+      </div>
+      <div style="font-size: 2.5rem; margin: 8px 0;">⚠️</div>
+      <p style="font-size: 0.95rem; color: var(--text-muted); margin-bottom: 12px;">
+        Esta acción eliminará de forma permanente la orden <strong id="admin-auth-target-id" style="color: var(--text-main);"></strong> del taller y de Google Sheets.
+      </p>
+      <div class="form-group" style="margin-bottom: 16px; text-align: left;">
+        <label class="form-label" for="admin-pin-input" style="font-weight: bold;">Ingresa el PIN de Administrador:</label>
+        <input type="password" id="admin-pin-input" class="form-control" placeholder="PIN (Por defecto: 1234)" style="text-align: center; font-size: 1.3rem; letter-spacing: 3px; font-weight: bold;" autocomplete="off">
+      </div>
+      <div class="btn-group">
+        <button type="button" class="btn btn-secondary" onclick="window.app && window.app.closeModal('modal-admin-auth')">Cancelar</button>
+        <button type="button" class="btn btn-danger" style="background-color: var(--danger); color: #fff;" onclick="window.app && window.app.confirmDeleteWithPin()">🗑️ Confirmar Eliminación</button>
+      </div>
     </div>
   </div>
 

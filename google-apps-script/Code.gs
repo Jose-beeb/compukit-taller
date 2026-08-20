@@ -479,6 +479,56 @@ function doPost(e) {
       return responseJSON({ status: "success", technicians: list });
     }
 
+    // 4. ELIMINAR ORDEN (PROTEGIDO)
+    if (action === "delete_order" || action === "delete") {
+      const orderId = payload.ID_Orden;
+      if (!orderId) {
+        return responseJSON({ status: "error", message: "ID_Orden requerido para eliminar" });
+      }
+
+      const data = sheetOrders.getDataRange().getValues();
+      let rowIndex = -1;
+
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]).trim().toLowerCase() === String(orderId).trim().toLowerCase()) {
+          rowIndex = i + 1;
+          break;
+        }
+      }
+
+      if (rowIndex !== -1) {
+        sheetOrders.deleteRow(rowIndex);
+        return responseJSON({
+          status: "success",
+          action: "delete",
+          orderId: orderId,
+          message: "Orden eliminada exitosamente de Google Sheets"
+        });
+      } else {
+        return responseJSON({ status: "error", message: "Orden no encontrada para eliminar: " + orderId });
+      }
+    }
+
+    // 5. ACTUALIZAR PIN DE ADMINISTRADOR
+    if (action === "update_pin") {
+      const newPin = payload.pin || "1234";
+      const dataCfg = sheetConfig.getDataRange().getValues();
+      let rowFound = -1;
+      for (let i = 1; i < dataCfg.length; i++) {
+        if (dataCfg[i][0] === "admin_pin") {
+          rowFound = i + 1;
+          break;
+        }
+      }
+      if (rowFound !== -1) {
+        sheetConfig.getRange(rowFound, 2).setValue(JSON.stringify(newPin));
+        sheetConfig.getRange(rowFound, 3).setValue(nowStr);
+      } else {
+        sheetConfig.appendRow(["admin_pin", JSON.stringify(newPin), nowStr]);
+      }
+      return responseJSON({ status: "success", message: "PIN actualizado en la nube" });
+    }
+
     return responseJSON({ status: "error", message: "Acción no reconocida: " + action });
 
   } catch (error) {

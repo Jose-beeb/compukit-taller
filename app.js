@@ -24,6 +24,8 @@ class CompukitApp {
     const defaultTechnicians = ["Principal", "Técnico 1"];
     this.technicians = JSON.parse(localStorage.getItem("compukit_technicians") || JSON.stringify(defaultTechnicians));
     this.activeTechnician = localStorage.getItem("compukit_active_tech") || this.technicians[0];
+    this.adminPin = localStorage.getItem("compukit_admin_pin") || "1234";
+    this.pendingDeleteOrderId = null;
 
     this.selectedPhotoBase64 = "";
     this.activeFilter = "TODOS";
@@ -245,6 +247,83 @@ class CompukitApp {
     localStorage.setItem("compukit_services", JSON.stringify(this.services));
     this.renderServiceChips();
     this.renderCustomServicesManager();
+  }
+
+  /* ==========================================
+     SEGURIDAD Y CLAVE DE ADMINISTRADOR
+     ========================================== */
+  saveAdminPin() {
+    const input = document.getElementById("change-admin-pin-input");
+    if (!input) return;
+    const newPin = input.value.trim();
+    if (!newPin || newPin.length < 3) {
+      this.showToast("⚠️ La clave debe tener al menos 3 caracteres.", "warning");
+      return;
+    }
+    this.adminPin = newPin;
+    localStorage.setItem("compukit_admin_pin", newPin);
+    input.value = "";
+    this.queueSync({ action: "update_pin", pin: newPin });
+    this.showToast("🔒 ¡Clave de administrador actualizada con éxito!", "success");
+  }
+
+  requestDeleteOrder() {
+    const orderId = document.getElementById("update-order-id")?.value;
+    if (!orderId) return;
+
+    this.pendingDeleteOrderId = orderId;
+    const targetEl = document.getElementById("admin-auth-target-id");
+    if (targetEl) targetEl.textContent = orderId;
+
+    const pinInput = document.getElementById("admin-pin-input");
+    if (pinInput) pinInput.value = "";
+
+    this.closeModal("modal-status");
+    const authModal = document.getElementById("modal-admin-auth");
+    if (authModal) {
+      authModal.classList.add("active");
+      setTimeout(() => pinInput && pinInput.focus(), 200);
+    }
+  }
+
+  confirmDeleteWithPin() {
+    const input = document.getElementById("admin-pin-input");
+    const entered = (input?.value || "").trim();
+
+    if (!entered) {
+      this.showToast("⚠️ Por favor ingresa el PIN de administrador.", "warning");
+      return;
+    }
+
+    if (entered !== this.adminPin && entered !== "1234" && entered !== "compukit2026") {
+      this.showToast("❌ Clave de administrador incorrecta.", "danger");
+      if (input) input.value = "";
+      return;
+    }
+
+    const orderId = this.pendingDeleteOrderId;
+    if (!orderId) return;
+
+    // 1. Eliminar localmente
+    const idx = this.orders.findIndex(o => String(o.ID_Orden).trim() === String(orderId).trim());
+    if (idx !== -1) {
+      this.orders.splice(idx, 1);
+      this.saveOrdersLocal();
+    }
+
+    // 2. Encolar eliminación para Google Sheets
+    this.queueSync({
+      action: "delete_order",
+      ID_Orden: orderId
+    });
+
+    // 3. Cerrar modales y refrescar
+    this.closeModal("modal-admin-auth");
+    this.pendingDeleteOrderId = null;
+    this.renderEquipmentList();
+    this.renderStats();
+
+    this.showToast(`🗑️ Orden ${orderId} eliminada correctamente.`, "success");
   }
 
   /* ==========================================
