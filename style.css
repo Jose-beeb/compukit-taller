@@ -886,6 +886,50 @@ textarea.form-control {
   font-weight: 700;
 }
 
+/* Tarjetas de Deuda / Saldos Pendientes en Reportes */
+.debt-card {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-left: 5px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.debt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.debt-client {
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
+.debt-amount {
+  font-size: 1.25rem;
+  font-weight: 900;
+  color: var(--danger);
+  white-space: nowrap;
+}
+
+.debt-meta {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-bottom: 10px;
+}
+
+.debt-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+
 /* Toast Notifications Flotantes (No Intrusivas) */
 #toast-container {
   position: fixed;

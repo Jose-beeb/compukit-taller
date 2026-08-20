@@ -228,27 +228,46 @@
     <!-- VISTA 3: REPORTES E INGRESOS -->
     <section id="view-reportes" class="view-section">
       <div class="section-header">
-        <h1 class="section-title">📊 Ingresos y Resumen</h1>
-        <p class="section-subtitle">Métricas rápidas del taller y saldo pendiente.</p>
+        <h1 class="section-title">📊 Ingresos y Cuentas por Cobrar</h1>
+        <p class="section-subtitle">Métricas financieras, dinero recaudado y saldos pendientes.</p>
       </div>
 
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-val" id="stat-total-money">$0.00</div>
-          <div class="stat-label">Total Cobrado</div>
+      <!-- Métricas Financieras -->
+      <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));">
+        <div class="stat-card" style="border-top: 4px solid var(--success);">
+          <div class="stat-val" id="stat-total-money" style="color: var(--success);">$0.00</div>
+          <div class="stat-label">💵 Total Cobrado Real</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" style="border-top: 4px solid var(--danger);">
+          <div class="stat-val" id="stat-total-pending" style="color: var(--danger);">$0.00</div>
+          <div class="stat-label">⚠️ Saldo por Cobrar</div>
+        </div>
+        <div class="stat-card" style="border-top: 4px solid var(--primary);">
           <div class="stat-val" id="stat-active-equip">0</div>
-          <div class="stat-label">Equipos en Taller</div>
+          <div class="stat-label">🛠️ Equipos en Taller</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" style="border-top: 4px solid #10b981;">
           <div class="stat-val" id="stat-ready-equip">0</div>
-          <div class="stat-label">Listos p/ Entregar</div>
+          <div class="stat-label">🟢 Listos p/ Retiro</div>
         </div>
       </div>
 
+      <!-- SECCIÓN: CLIENTES CON SALDOS PENDIENTES DE PAGO -->
+      <div class="wizard-card" style="margin-bottom: 20px; border-left: 5px solid var(--danger);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div>
+            <h3 style="color: var(--danger); font-size: 1.15rem; margin-bottom: 2px;">⚠️ Cuentas por Cobrar (Saldos Pendientes)</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin: 0;">Lista detallada de clientes que deben dinero al taller.</p>
+          </div>
+          <span id="pending-debts-badge" style="background-color: var(--danger); color: #fff; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 0.9rem;">0</span>
+        </div>
+        <div id="pending-debts-list"></div>
+      </div>
+
+      <!-- SECCIÓN: HISTORIAL DE ENTREGAS -->
       <div class="wizard-card">
-        <h3 style="margin-bottom: 12px;">📈 Últimos Trabajos Entregados</h3>
+        <h3 style="margin-bottom: 8px;">📦 Últimos Trabajos Entregados</h3>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">Historial de entregas y estado de cobro.</p>
         <div id="recent-delivered-list"></div>
       </div>
     </section>

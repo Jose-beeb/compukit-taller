@@ -1083,17 +1083,32 @@ class CompukitApp {
   }
 
   renderStats() {
-    let totalMoney = 0;
+    let totalCollected = 0;
+    let totalPending = 0;
     let activeEquip = 0;
     let readyEquip = 0;
     const deliveredList = [];
+    const pendingDebtsList = [];
 
     this.orders.forEach(r => {
       const cost = parseFloat(r.Costo_Total || 0);
+      const abono = parseFloat(r.Abono || 0);
+      const pending = Math.max(0, cost - abono);
       const status = r.Estado || "Recibido";
 
+      // 1. Dinero real ingresado (abonos y pagos realizados)
+      totalCollected += abono;
+
+      // 2. Dinero pendiente por cobrar
+      if (pending > 0 && cost > 0) {
+        totalPending += pending;
+        pendingDebtsList.push({
+          ...r,
+          calculatedPending: pending
+        });
+      }
+
       if (status === "Entregado") {
-        totalMoney += cost;
         deliveredList.push(r);
       } else {
         activeEquip++;
@@ -1101,28 +1116,103 @@ class CompukitApp {
       }
     });
 
+    // Ordenar deudores por mayor saldo pendiente primero
+    pendingDebtsList.sort((a, b) => b.calculatedPending - a.calculatedPending);
+
     const statMoney = document.getElementById("stat-total-money");
+    const statPending = document.getElementById("stat-total-pending");
     const statActive = document.getElementById("stat-active-equip");
     const statReady = document.getElementById("stat-ready-equip");
+    const debtsBadge = document.getElementById("pending-debts-badge");
 
-    if (statMoney) statMoney.textContent = `$${totalMoney.toFixed(2)}`;
+    if (statMoney) statMoney.textContent = `$${totalCollected.toFixed(2)}`;
+    if (statPending) statPending.textContent = `$${totalPending.toFixed(2)}`;
     if (statActive) statActive.textContent = activeEquip;
     if (statReady) statReady.textContent = readyEquip;
+    if (debtsBadge) debtsBadge.textContent = pendingDebtsList.length;
 
+    // Renderizar lista detallada de cuentas por cobrar
+    const debtsContainer = document.getElementById("pending-debts-list");
+    if (debtsContainer) {
+      if (pendingDebtsList.length === 0) {
+        debtsContainer.innerHTML = `
+          <div style="text-align: center; padding: 20px; color: var(--success); font-weight: bold; background-color: var(--bg-card); border-radius: var(--radius-sm);">
+            🎉 ¡Excelente! No hay clientes con saldo pendiente de pago.
+          </div>
+        `;
+      } else {
+        debtsContainer.innerHTML = pendingDebtsList.map(r => {
+          const isDelivered = r.Estado === "Entregado";
+          const safeId = this.escapeHTML(r.ID_Orden || "");
+          return `
+            <div class="debt-card">
+              <div class="debt-header">
+                <div>
+                  <div class="debt-client">👤 ${this.escapeHTML(r.Cliente || "Sin Nombre")}</div>
+                  <div style="font-size: 0.85rem; color: var(--text-muted);">📞 ${this.escapeHTML(r.Telefono || "Sin Teléfono")} | <strong>${safeId}</strong></div>
+                </div>
+                <div style="text-align: right;">
+                  <div class="debt-amount">$${r.calculatedPending.toFixed(2)}</div>
+                  <span style="font-size: 0.75rem; font-weight: 800; color: ${isDelivered ? 'var(--danger)' : 'var(--warning)'};">
+                    ${isDelivered ? '🔴 ENTREGADO (A CRÉDITO)' : '🟡 EN TALLER'}
+                  </span>
+                </div>
+              </div>
+
+              <div class="debt-meta">
+                💻 <strong>${this.escapeHTML(r.Tipo_Equipo || "")} ${this.escapeHTML(r.Marca_Modelo || "")}</strong><br>
+                <span>Costo Total: $${parseFloat(r.Costo_Total || 0).toFixed(2)} | Abono Recibido: $${parseFloat(r.Abono || 0).toFixed(2)}</span>
+                ${r.Trabajo_Realizado ? `<br><em>Trabajo: ${this.escapeHTML(r.Trabajo_Realizado)}</em>` : ''}
+              </div>
+
+              <div class="debt-actions">
+                <button class="btn btn-whatsapp btn-sm" onclick="window.app && window.app.sendWhatsAppDebtReminder('${safeId}')" title="Enviar recordatorio de cobro por WhatsApp">
+                  💬 Cobrar por WhatsApp
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="window.app && window.app.openUpdateModal('${safeId}')" title="Registrar pago de saldo">
+                  💵 Registrar Pago / Liquidar
+                </button>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+    }
+
+    // Renderizar historial de entregas
     const listEl = document.getElementById("recent-delivered-list");
     if (listEl) {
       if (deliveredList.length === 0) {
         listEl.innerHTML = `<p style="color: var(--text-muted);">No hay entregas registradas aún.</p>`;
       } else {
-        listEl.innerHTML = deliveredList.slice(0, 5).map(r => `
-          <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border-color);">
-            <div>
-              <strong>${this.escapeHTML(r.Cliente)}</strong> (${this.escapeHTML(r.Tipo_Equipo)})
-              <div style="font-size: 0.85rem; color: var(--text-muted);">${r.Fecha_Entrega || r.Fecha_Ingreso}</div>
+        listEl.innerHTML = deliveredList.slice(0, 8).map(r => {
+          const total = parseFloat(r.Costo_Total || 0);
+          const abono = parseFloat(r.Abono || 0);
+          const pend = Math.max(0, total - abono);
+          const isFullyPaid = pend <= 0;
+
+          return `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border-color);">
+              <div>
+                <strong>${this.escapeHTML(r.Cliente)}</strong> (${this.escapeHTML(r.Tipo_Equipo)})
+                <div style="font-size: 0.85rem; color: var(--text-muted);">
+                  Entregado: ${r.Fecha_Entrega || r.Fecha_Ingreso || "Reciente"} | N°: ${this.escapeHTML(r.ID_Orden)}
+                </div>
+                <div>
+                  <span style="font-size: 0.8rem; font-weight: bold; color: ${isFullyPaid ? 'var(--success)' : 'var(--danger)'};">
+                    ${isFullyPaid ? '✅ Cancelado 100%' : `⚠️ Pendiente: $${pend.toFixed(2)}`}
+                  </span>
+                </div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 1.15rem; font-weight: bold; color: var(--success);">$${total.toFixed(2)}</div>
+                <button class="btn btn-secondary btn-sm" style="margin-top: 4px; padding: 4px 8px; font-size: 0.8rem;" onclick="window.app && window.app.openUpdateModal('${this.escapeHTML(r.ID_Orden)}')">
+                  📝 Ver / Editar
+                </button>
+              </div>
             </div>
-            <div style="font-size: 1.1rem; font-weight: bold; color: var(--success);">$${parseFloat(r.Costo_Total || 0).toFixed(2)}</div>
-          </div>
-        `).join("");
+          `;
+        }).join("");
       }
     }
   }
@@ -1130,6 +1220,36 @@ class CompukitApp {
   /* ==========================================
      WHATSAPP, MODALES Y TICKETS
      ========================================== */
+  sendWhatsAppDebtReminder(orderId) {
+    const order = this.orders.find(o => String(o.ID_Orden).trim() === String(orderId).trim());
+    if (!order) return;
+
+    let cleanPhone = String(order.Telefono || "").replace(/\D/g, "");
+    if (!cleanPhone) {
+      this.showToast("⚠️ Número de teléfono no válido.", "warning");
+      return;
+    }
+
+    if (!cleanPhone.startsWith("593") && cleanPhone.startsWith("0")) {
+      cleanPhone = "593" + cleanPhone.substring(1);
+    }
+
+    const cleanEquipment = String(order.Tipo_Equipo || "Equipo").replace(/[^\p{L}\p{N}\s\/\-\.]/gu, "").trim();
+    const totalCost = parseFloat(order.Costo_Total || 0);
+    const advance = parseFloat(order.Abono || 0);
+    const pendingBalance = Math.max(0, totalCost - advance);
+
+    const msg = `Hola *${order.Cliente || 'Estimado/a cliente'}*, le saludamos cordialmente de *COMPUKIT*.\n\nLe recordamos que mantiene un saldo pendiente de pago por el servicio de su *${cleanEquipment}*:\n\n` +
+      `📋 *N° Orden:* ${order.ID_Orden}\n` +
+      `💵 *Costo Total:* $${totalCost.toFixed(2)}\n` +
+      `✅ *Abono recibido:* $${advance.toFixed(2)}\n` +
+      `🔴 *Saldo Pendiente:* *$${pendingBalance.toFixed(2)}*\n\n` +
+      `Puede cancelar su saldo pendiente en nuestro local (efectivo o transferencia). ¡Agradecemos su preferencia!`;
+
+    const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, "_blank");
+  }
+
   sendWhatsAppByOrderId(orderId) {
     const order = this.orders.find(o => o.ID_Orden === orderId);
     if (!order) return;
@@ -1139,7 +1259,7 @@ class CompukitApp {
   sendWhatsApp(phone, name, equipment, status, cost, issue, workDone) {
     let cleanPhone = String(phone || "").replace(/\D/g, "");
     if (!cleanPhone) {
-      alert("Número de teléfono no válido.");
+      this.showToast("⚠️ Número de teléfono no válido.", "warning");
       return;
     }
 
@@ -1174,7 +1294,7 @@ class CompukitApp {
   }
 
   openUpdateModal(orderId) {
-    const order = this.orders.find(o => o.ID_Orden === orderId);
+    const order = this.orders.find(o => String(o.ID_Orden).trim() === String(orderId).trim());
     if (!order) return;
 
     document.getElementById("update-order-id").value = orderId;
@@ -1185,7 +1305,31 @@ class CompukitApp {
     const advanceInput = document.getElementById("update-advance-cost");
     if (advanceInput) advanceInput.value = order.Abono || 0;
 
-    this.onStatusSelectChange();
+    const deliverySection = document.getElementById("delivery-payment-section");
+    const paymentTypeSelect = document.getElementById("update-payment-type");
+    const deliveryPaidInput = document.getElementById("delivery-amount-paid");
+
+    const totalCost = parseFloat(order.Costo_Total || 0);
+    const initialAdvance = parseFloat(order.Abono || 0);
+    const currentPending = Math.max(0, totalCost - initialAdvance);
+
+    if (order.Estado === "Entregado") {
+      if (deliverySection) deliverySection.style.display = "block";
+      if (currentPending <= 0) {
+        if (paymentTypeSelect) paymentTypeSelect.value = "FULL";
+        if (deliveryPaidInput) deliveryPaidInput.value = "0.00";
+      } else {
+        // Si ya estaba entregado y tenía deuda, no marcarlo como FULL por error
+        if (paymentTypeSelect) paymentTypeSelect.value = "NONE";
+        if (deliveryPaidInput) deliveryPaidInput.value = "0.00";
+      }
+    } else {
+      if (deliverySection) deliverySection.style.display = "none";
+      if (paymentTypeSelect) paymentTypeSelect.value = "FULL";
+      if (deliveryPaidInput) deliveryPaidInput.value = currentPending.toFixed(2);
+    }
+
+    this.recalculateDeliveryBalance();
     document.getElementById("modal-status").classList.add("active");
   }
 
