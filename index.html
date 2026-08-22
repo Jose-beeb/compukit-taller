@@ -426,6 +426,22 @@
           <button type="button" class="btn btn-secondary btn-sm" style="margin-top: 6px;" onclick="window.app && window.app.startVoiceDictation('update-work-done')">🎙️ Dictar Trabajo</button>
         </div>
 
+        <!-- SECCIÓN: RIESGOS Y CONSECUENCIAS POR INACCIÓN (SUGERENCIA INTELIGENTE) -->
+        <div class="form-group" style="background-color: var(--bg-secondary); border: 2px dashed var(--warning); border-radius: var(--radius-md); padding: 12px; margin-top: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+            <label class="form-label" for="update-inaction-risk" style="margin-bottom: 0; color: var(--warning); font-weight: 800; font-size: 0.95rem;">
+              ⚠️ Riesgo / Costo si no se repara a tiempo:
+            </label>
+            <button type="button" class="btn btn-primary btn-sm" style="font-size: 0.85rem; padding: 6px 12px; min-height: 38px;" onclick="window.app && window.app.autoSuggestRisk()" title="Analiza el diagnóstico y autocompleta el riesgo y costo de inacción">
+              ✨ Sugerir Automático
+            </button>
+          </div>
+          <textarea id="update-inaction-risk" class="form-control" placeholder="Consecuencias o costos adicionales si el cliente posterga la reparación..."></textarea>
+          <div style="display: flex; gap: 8px; margin-top: 6px;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.app && window.app.startVoiceDictation('update-inaction-risk')">🎙️ Dictar Riesgo</button>
+          </div>
+        </div>
+
         <div class="form-group">
           <label class="form-label" for="update-technician-select">👨‍🔧 Técnico Responsable / A Cargo</label>
           <select id="update-technician-select" class="form-control" style="font-size: 1.1rem; font-weight: 700;">
@@ -624,6 +640,81 @@
       <div class="btn-group">
         <a id="photo-viewer-drive-link" href="#" target="_blank" class="btn btn-secondary" style="display: none; justify-content: center; font-size: 0.95rem;">📁 Abrir en Google Drive</a>
         <button class="btn btn-primary" onclick="window.app && window.app.closeModal('modal-photo-viewer')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: INFORME TÉCNICO Y PRESUPUESTO CON ANÁLISIS DE RIESGOS -->
+  <div id="modal-technical-report" class="modal-overlay" onclick="if(event.target === this) window.app && window.app.closeModal('modal-technical-report')">
+    <div class="modal-card" style="max-width: 680px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <h3 class="modal-title">📑 Informe Técnico y Presupuesto</h3>
+        <button class="icon-btn" onclick="window.app && window.app.closeModal('modal-technical-report')">✖️</button>
+      </div>
+
+      <div id="report-preview-box" style="background: var(--bg-card); border: 2px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; margin: 12px 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--primary); padding-bottom: 8px; margin-bottom: 12px;">
+          <div>
+            <h2 style="color: var(--primary); font-size: 1.3rem; margin: 0;">COMPUKIT</h2>
+            <div style="font-size: 0.85rem; color: var(--text-muted);">Informe Técnico de Diagnóstico y Presupuesto</div>
+          </div>
+          <div style="text-align: right;">
+            <div style="font-weight: bold; font-size: 1rem;" id="report-id-val">CK-000000</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);" id="report-date-val"></div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.95rem; margin-bottom: 12px; background: var(--bg-secondary); padding: 10px; border-radius: var(--radius-sm);">
+          <div><strong>👤 Cliente:</strong> <span id="report-client-val"></span></div>
+          <div><strong>📞 Teléfono:</strong> <span id="report-phone-val"></span></div>
+          <div><strong>💻 Equipo:</strong> <span id="report-equipment-val"></span></div>
+          <div><strong>👨‍🔧 Técnico:</strong> <span id="report-tech-val"></span></div>
+        </div>
+
+        <div style="margin-bottom: 10px;">
+          <strong style="color: var(--primary); font-size: 0.95rem;">🔍 Diagnóstico Técnico Confirmado:</strong>
+          <p id="report-issue-val" style="margin-top: 2px; font-size: 0.95rem; background: var(--bg-secondary); padding: 8px; border-radius: var(--radius-sm);"></p>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <strong style="color: var(--success); font-size: 0.95rem;">🛠️ Trabajo y Solución Propuesta:</strong>
+          <p id="report-work-val" style="margin-top: 2px; font-size: 0.95rem; background: var(--bg-secondary); padding: 8px; border-radius: var(--radius-sm);"></p>
+        </div>
+
+        <!-- CUADRO COMPARATIVO DE INVERSIÓN VS RIESGO -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;">
+          <div style="background: var(--success-light); border: 2px solid var(--success); border-radius: var(--radius-sm); padding: 10px; text-align: center;">
+            <div style="font-size: 0.8rem; font-weight: bold; color: var(--success); text-transform: uppercase;">🟢 Reparación Oportuna Hoy</div>
+            <div id="report-cost-val" style="font-size: 1.4rem; font-weight: 800; color: var(--success); margin: 4px 0;">$0.00</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Garantía de servicio incluida</div>
+          </div>
+          <div style="background: var(--danger-light); border: 2px solid var(--danger); border-radius: var(--radius-sm); padding: 10px; text-align: center;">
+            <div style="font-size: 0.8rem; font-weight: bold; color: var(--danger); text-transform: uppercase;">⚠️ Si se posterga la reparación</div>
+            <div style="font-size: 0.85rem; font-weight: bold; color: var(--danger); margin-top: 4px;" id="report-risk-badge">Riesgo de daño mayor</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Costos adicionales por agravamiento</div>
+          </div>
+        </div>
+
+        <div style="background: var(--bg-secondary); border-left: 4px solid var(--danger); padding: 10px; border-radius: var(--radius-sm); font-size: 0.9rem; margin-bottom: 6px;">
+          <strong style="color: var(--danger);">⚠️ Advertencia Técnica de Riesgo:</strong>
+          <div id="report-risk-val" style="margin-top: 4px; line-height: 1.4;"></div>
+        </div>
+
+        <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; margin-top: 8px;">
+          ⏱️ Presupuesto válido por 15 días a partir de la fecha de emisión.
+        </div>
+      </div>
+
+      <div class="btn-group" style="display: flex; flex-direction: column; gap: 10px;">
+        <button class="btn btn-primary" style="font-size: 1.1rem; width: 100%;" onclick="window.app && window.app.downloadTechnicalReportPDF()">
+          📥 Descargar Informe en PDF (A4)
+        </button>
+        <button class="btn btn-whatsapp" style="font-size: 1.1rem; width: 100%;" onclick="window.app && window.app.sendWhatsAppQuoteWithRisk()">
+          💬 Enviar Presupuesto y Riesgos por WhatsApp
+        </button>
+        <button class="btn btn-secondary" style="width: 100%; font-size: 0.95rem;" onclick="window.app && window.app.closeModal('modal-technical-report')">
+          Cerrar
+        </button>
       </div>
     </div>
   </div>

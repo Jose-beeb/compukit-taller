@@ -50,11 +50,12 @@ Compukit/
 | 9 | `Fotos_Drive_URL` | Texto | Enlace público a la foto en Google Drive |
 | 10 | `Estado` | Texto | `Recibido`, `En Diagnóstico`, `Esperando Aprobación`, `En Reparación`, `Listo`, `Entregado` |
 | 11 | `Trabajo_Realizado` | Texto | Detalle de reparación / repuestos |
-| 12 | `Costo_Total` | Número | Valor total del trabajo |
-| 13 | `Abono` | Número | Abono inicial entregado |
-| 14 | `Saldo_Pendiente` | Número | `Costo_Total - Abono` |
-| 15 | `Fecha_Entrega` | Texto/Fecha | Fecha de entrega al cliente |
-| 16 | `Ultima_Actualizacion` | Texto/Fecha | Timestamp de última edición |
+| 12 | `Riesgo_Inaccion` | Texto | Advertencia técnica y costo por agravamiento si se posterga la reparación |
+| 13 | `Costo_Total` | Número | Valor total del trabajo |
+| 14 | `Abono` | Número | Abono inicial entregado |
+| 15 | `Saldo_Pendiente` | Número | `Costo_Total - Abono` |
+| 16 | `Fecha_Entrega` | Texto/Fecha | Fecha de entrega al cliente |
+| 17 | `Ultima_Actualizacion` | Texto/Fecha | Timestamp de última edición |
 
 ### Pestaña 2: `Flujo_Caja`
 | Columna N° | Nombre Exacto de Columna | Tipo | Descripción |
@@ -84,9 +85,9 @@ Compukit/
 ---
 
 ## 🚦 Estado Actual de las Tareas
-- [x] Backend `Code.gs` actualizado con subida a Drive, 3 pestañas (`Órdenes`, `Flujo_Caja`, `Configuracion_Taller`), y `doPost` bidireccional.
+- [x] Backend `Code.gs` actualizado con subida a Drive, 3 pestañas (`Órdenes`, `Flujo_Caja`, `Configuracion_Taller`), soporte para `Riesgo_Inaccion` y `doPost` bidireccional.
 - [x] Frontend `app.js` actualizado con compresión Canvas (1024px JPEG 0.7), `redirect: "follow"` + `text/plain`, cola offline resiliente y gestión de técnicos sincronizados.
-- [x] Actualización de `PROJECT_STATE.md` con el esquema completo de 3 pestañas.
-- [x] Gestión de Servicios y Equipos Editables (ej: *Impresión de Planos*, *Mantenimiento Preventivo*, etc.) con persistencia en `localStorage`.
-- [x] Documentación y manuales (`MANUAL_USUARIO.md`, `PROMPT_CANVA_MANUAL_VISUAL.md`, `PROJECT_STATE.md`, `AGENTS.md`) completamente sincronizados y verificados.
+- [x] Motor de Base de Conocimiento Inteligente (`DiagnosticAdvisor`) offline con sugerencias automáticas de riesgos de inacción y costos por agravamiento con 1 solo clic.
+- [x] Generador de Informe Técnico y Presupuesto formal en PDF (A4) con cuadro comparativo de inversión vs. riesgo por inacción y firmas.
+- [x] Mensajería persuasiva de WhatsApp con cotizaciones completas incluyendo advertencias técnicas y costos por postergación.
 - [x] Corrección y optimización del buscador de taller (soporte para acentos, búsqueda por múltiples palabras, tipos de datos seguros y compatibilidad total con teclados virtuales móviles).

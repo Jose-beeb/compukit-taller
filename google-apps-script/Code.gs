@@ -31,6 +31,7 @@ const HEADERS_ORDERS = [
   "Fotos_Drive_URL",
   "Estado",
   "Trabajo_Realizado",
+  "Riesgo_Inaccion",
   "Tecnico_Responsable",
   "Costo_Total",
   "Abono",
@@ -307,6 +308,7 @@ function doPost(e) {
           case "Fotos_Drive_URL": return photoUrl;
           case "Estado": return payload.Estado || "Recibido";
           case "Trabajo_Realizado": return payload.Trabajo_Realizado || "";
+          case "Riesgo_Inaccion": return payload.Riesgo_Inaccion || "";
           case "Tecnico_Responsable": return payload.Tecnico_Responsable || "Principal";
           case "Costo_Total": return total;
           case "Abono": return abono;
@@ -374,6 +376,10 @@ function doPost(e) {
       if (payload.Trabajo_Realizado !== undefined) {
         const col = headers.indexOf("Trabajo_Realizado");
         if (col !== -1) sheetOrders.getRange(rowIndex, col + 1).setValue(payload.Trabajo_Realizado);
+      }
+      if (payload.Riesgo_Inaccion !== undefined) {
+        const col = headers.indexOf("Riesgo_Inaccion");
+        if (col !== -1) sheetOrders.getRange(rowIndex, col + 1).setValue(payload.Riesgo_Inaccion);
       }
       if (payload.Tecnico_Responsable) {
         const col = headers.indexOf("Tecnico_Responsable");

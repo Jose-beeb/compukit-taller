@@ -681,6 +681,7 @@ class CompukitApp {
     const newStatus = document.getElementById("update-status-select").value;
     const newIssue = document.getElementById("update-issue-description").value.trim();
     const workDone = document.getElementById("update-work-done").value.trim();
+    const inactionRisk = document.getElementById("update-inaction-risk")?.value.trim() || "";
     const totalCost = parseFloat(document.getElementById("update-total-cost").value) || 0;
     const advanceInput = parseFloat(document.getElementById("update-advance-cost")?.value) || 0;
     const updatedTech = document.getElementById("update-technician-select")?.value || "Principal";
@@ -693,6 +694,7 @@ class CompukitApp {
     order.Estado = newStatus;
     if (newIssue) order.Falla_Reportada = newIssue;
     order.Trabajo_Realizado = workDone;
+    order.Riesgo_Inaccion = inactionRisk;
     order.Costo_Total = totalCost;
     order.Tecnico_Responsable = updatedTech;
 
@@ -739,6 +741,7 @@ class CompukitApp {
       Estado: newStatus,
       Falla_Reportada: order.Falla_Reportada,
       Trabajo_Realizado: workDone,
+      Riesgo_Inaccion: inactionRisk,
       Tecnico_Responsable: updatedTech,
       Costo_Total: totalCost,
       Abono: order.Abono,
@@ -1231,6 +1234,7 @@ class CompukitApp {
         <div style="font-size: 0.95rem; background-color: var(--bg-secondary); padding: 8px; border-radius: var(--radius-sm);">
           <strong>🔍 Diagnóstico / Falla:</strong> ${this.escapeHTML(r.Falla_Reportada || "Sin detalle")}
           ${r.Trabajo_Realizado ? `<br><strong style="color: var(--primary);">🛠️ Trabajo / Repuestos:</strong> ${this.escapeHTML(r.Trabajo_Realizado)}` : ''}
+          ${r.Riesgo_Inaccion ? `<br><strong style="color: var(--danger);">⚠️ Riesgo por inacción:</strong> <span style="font-size: 0.9rem; color: var(--danger); font-weight: 600;">${this.escapeHTML(r.Riesgo_Inaccion)}</span>` : ''}
           ${r.Tecnico_Responsable ? `<br><strong style="color: var(--text-muted);">👨‍🔧 Atendido por:</strong> <span style="font-weight: bold; color: var(--text-main);">${this.escapeHTML(r.Tecnico_Responsable)}</span>` : ''}
           ${r.Fotos_Drive_URL ? `<br><strong style="color: var(--info);">📁 Foto Drive:</strong> <a href="${r.Fotos_Drive_URL}" target="_blank" style="color: var(--primary); text-decoration: underline;">Abrir en Drive</a>` : ''}
         </div>
@@ -1247,6 +1251,9 @@ class CompukitApp {
         <div class="card-actions">
           <button class="btn btn-secondary btn-sm" onclick="window.app && window.app.openUpdateModal('${safeId}')">
             📝 Diagnóstico / Estado
+          </button>
+          <button class="btn btn-secondary btn-sm" style="color: var(--primary); border-color: var(--primary);" onclick="window.app && window.app.showTechnicalReportModal('${safeId}')" title="Generar Informe Técnico con análisis de riesgos y costos">
+            📑 Informe Técnico
           </button>
           <button class="btn btn-whatsapp btn-sm" onclick="window.app && window.app.sendWhatsAppByOrderId('${safeId}')">
             💬 WhatsApp
@@ -1482,10 +1489,10 @@ class CompukitApp {
   sendWhatsAppByOrderId(orderId) {
     const order = this.orders.find(o => String(o.ID_Orden).trim() === String(orderId).trim());
     if (!order) return;
-    this.sendWhatsApp(order.Telefono, order.Cliente, order.Tipo_Equipo, order.Estado, order.Costo_Total, order.Falla_Reportada, order.Trabajo_Realizado);
+    this.sendWhatsApp(order.Telefono, order.Cliente, order.Tipo_Equipo, order.Estado, order.Costo_Total, order.Falla_Reportada, order.Trabajo_Realizado, order.Riesgo_Inaccion);
   }
 
-  sendWhatsApp(phone, name, equipment, status, cost, issue, workDone) {
+  sendWhatsApp(phone, name, equipment, status, cost, issue, workDone, inactionRisk = "") {
     const cleanPhone = this.formatPhoneForWhatsApp(phone);
     if (!cleanPhone || cleanPhone.length < 10) {
       this.showToast("⚠️ Número de teléfono no válido para WhatsApp (ej: 0991234567).", "warning");
@@ -1498,10 +1505,17 @@ class CompukitApp {
     const formattedCost = `$${parseFloat(cost || 0).toFixed(2)}`;
     const issueDetail = issue ? `\n*Diagnóstico / Falla:* ${issue}` : "";
     const workDetail = workDone ? `\n*Solución / Trabajo:* ${workDone}` : "";
+    
+    // Si no tiene riesgo manual, sugerir automáticamente si está esperando aprobación
+    let riskWarning = inactionRisk;
+    if (!riskWarning && status === "Esperando Aprobación") {
+      riskWarning = this.getDiagnosticRiskSuggestion(issue, workDone, cleanEquipment).risk;
+    }
+    const riskDetail = riskWarning ? `\n\n⚠️ *Advertencia Técnica (Riesgo si no se repara a tiempo):*\n${riskWarning}` : "";
 
     let msg = "";
     if (status === "Esperando Aprobación") {
-      msg = `Hola ${name}, le saludamos de *COMPUKIT*.\n\nHemos finalizado la revisión y diagnóstico de su *${cleanEquipment}*:\n${issueDetail}${workDetail}\n\n*Costo Estimado:* *${formattedCost}*\n\n¿Desea que procedamos con el trabajo? Por favor nos confirma para iniciar.`;
+      msg = `Hola ${name}, le saludamos de *COMPUKIT*.\n\nHemos finalizado la revisión y diagnóstico de su *${cleanEquipment}*:\n${issueDetail}${workDetail}\n\n*Inversión de Reparación Hoy:* *${formattedCost}*${riskDetail}\n\n¿Desea que procedamos con el trabajo? Por favor nos confirma para iniciar.`;
     } else if (status === "En Diagnóstico") {
       msg = `Hola ${name}, le saludamos de *COMPUKIT*. Le informamos que su *${cleanEquipment}* se encuentra actualmente en proceso de *revisión y diagnóstico técnico*. Le notificaremos apenas tengamos el informe detallado y costo.`;
     } else if (status === "En Reparación") {
@@ -1575,6 +1589,8 @@ class CompukitApp {
     document.getElementById("update-status-select").value = order.Estado || "Recibido";
     document.getElementById("update-issue-description").value = order.Falla_Reportada || "";
     document.getElementById("update-work-done").value = order.Trabajo_Realizado || "";
+    const riskInput = document.getElementById("update-inaction-risk");
+    if (riskInput) riskInput.value = order.Riesgo_Inaccion || "";
     document.getElementById("update-total-cost").value = order.Costo_Total || 0;
     const advanceInput = document.getElementById("update-advance-cost");
     if (advanceInput) advanceInput.value = order.Abono || 0;
@@ -1825,6 +1841,371 @@ class CompukitApp {
     });
 
     doc.save(`Ticket_Doble_${rec.ID_Orden}.pdf`);
+  }
+
+  /* ==========================================
+     MOTOR INTELIGENTE DE RIESGOS Y PRESUPUESTOS (DIAGNOSTIC ADVISOR)
+     ========================================== */
+  getDiagnosticRiskSuggestion(issueText = "", workText = "", eqType = "") {
+    const combined = this.normalizeSearchText(`${issueText} ${workText} ${eqType}`);
+
+    // 1. Térmico / Ventilador / Pasta
+    if (combined.includes("calien") || combined.includes("temperatura") || combined.includes("ventilador") || 
+        combined.includes("pasta") || combined.includes("apaga sola") || combined.includes("cooler") || combined.includes("fan")) {
+      return {
+        category: "Sobrecalentamiento Térmico",
+        risk: "Si se posterga el mantenimiento térmico, el calor excesivo desoldará o quemará el procesador central (CPU) o chip gráfico (GPU). Reparación agravada estimada: $120.00 - $190.00 o reemplazo total de placa madre.",
+        riskShort: "Quemadura de CPU/GPU ($120 - $190)"
+      };
+    }
+
+    // 2. Bisagras / Carcasa / Tapa
+    if (combined.includes("bisagra") || combined.includes("tapa") || combined.includes("carcasa") || 
+        combined.includes("dura") || combined.includes("anclaje") || combined.includes("abrir") || combined.includes("partid")) {
+      return {
+        category: "Tensión en Bisagras / Carcasa",
+        risk: "La presión mecánica fracturará la pantalla LED y romperá el cable flex de video al abrir o cerrar la tapa. Costo de reemplazo agravado: $85.00 - $140.00 (pantalla nueva + carcasa superior).",
+        riskShort: "Ruptura de pantalla LED y flex ($85 - $140)"
+      };
+    }
+
+    // 3. Líquido / Humedad / Sulfato
+    if (combined.includes("agua") || combined.includes("liquido") || combined.includes("cafe") || 
+        combined.includes("mojad") || combined.includes("sulfat") || combined.includes("humed") || combined.includes("refresco")) {
+      return {
+        category: "Corrosión por Líquidos",
+        risk: "La humedad genera sulfatación y corrosión ácida continua que destruye pistas de cobre y componentes SMD de 19V. Costo por daño agravado: $150.00+ o pérdida total de la placa madre.",
+        riskShort: "Corrosión ácida irreversible de placa ($150+)"
+      };
+    }
+
+    // 4. Disco Duro / Almacenamiento / SMART
+    if (combined.includes("disco") || combined.includes("lenta") || combined.includes("azul") || 
+        combined.includes("smart") || combined.includes("sector") || combined.includes("congel") || combined.includes("hdd")) {
+      return {
+        category: "Degradación de Almacenamiento",
+        risk: "Los sectores dañados se propagan causando el bloqueo electromecánico definitivo de los cabezales, con pérdida total e irrecuperable de fotos y documentos. Costo de recuperación forense: $150.00 - $350.00.",
+        riskShort: "Pérdida total e irrecuperable de archivos ($150 - $350)"
+      };
+    }
+
+    // 5. Batería hinchada / Inflada
+    if (combined.includes("bateria") || combined.includes("hinchad") || combined.includes("inflad") || 
+        combined.includes("no carga") || combined.includes("battery")) {
+      return {
+        category: "Riesgo en Batería de Litio",
+        risk: "La celda de litio inflamada puede perforarse y causar fuego químico espontáneo, además de deformar y romper permanentemente el touchpad y teclado ($70.00 - $120.00).",
+        riskShort: "Riesgo de incendio y rotura de teclado ($70 - $120)"
+      };
+    }
+
+    // 6. Jack de Carga / Pin / Conector
+    if (combined.includes("jack") || combined.includes("pin de carga") || combined.includes("conector") || 
+        combined.includes("falso contacto") || combined.includes("mueve el cable") || combined.includes("cargador")) {
+      return {
+        category: "Falso Contacto en Alimentación",
+        risk: "Los micro-arcos eléctricos provocan picos de voltaje que queman los transistores MOSFET de entrada y el circuito integrado regulador de carga de la placa ($60.00 - $110.00).",
+        riskShort: "Corto en circuito de carga de placa ($60 - $110)"
+      };
+    }
+
+    // 7. Corto / No enciende / Olor a quemado
+    if (combined.includes("no prende") || combined.includes("no enciende") || combined.includes("muert") || 
+        combined.includes("corto") || combined.includes("quemad") || combined.includes("chip")) {
+      return {
+        category: "Cortocircuito Electrónico",
+        risk: "Intentar forzar el encendido o conectar el cargador propagará el cortocircuito hacia el microprocesador o puente sur (PCH), provocando la pérdida total e irreparable del equipo.",
+        riskShort: "Propagación de corto a microprocesador (Pérdida total)"
+      };
+    }
+
+    // 8. Impresora: Almohadillas / Cabezal / Atasco
+    if (combined.includes("impresora") || combined.includes("almohadilla") || combined.includes("cabezal") || 
+        combined.includes("tinta") || combined.includes("atasco") || combined.includes("inyector")) {
+      return {
+        category: "Sobrecarga en Sistema de Impresión",
+        risk: "El derrame interno de tinta residual alcanzará la placa lógica principal o quemará los inyectores piezoeléctricos del cabezal de impresión ($60.00 - $95.00).",
+        riskShort: "Derrame de tinta en placa lógica / Cabezal quemado ($60 - $95)"
+      };
+    }
+
+    // 9. Predeterminado Genérico
+    return {
+      category: "Desgaste Progresivo",
+      risk: "Postergar la solución técnica provocará un desgaste acelerado de los componentes asociados, incrementando sustancialmente el costo final de reparación y tiempo fuera de servicio.",
+      riskShort: "Agravamiento progresivo del daño y mayor costo"
+    };
+  }
+
+  autoSuggestRisk() {
+    const issue = document.getElementById("update-issue-description")?.value || "";
+    const work = document.getElementById("update-work-done")?.value || "";
+    const orderId = document.getElementById("update-order-id")?.value || "";
+    const order = this.orders.find(o => String(o.ID_Orden).trim() === String(orderId).trim());
+    const eqType = order ? order.Tipo_Equipo : "";
+
+    const suggestion = this.getDiagnosticRiskSuggestion(issue, work, eqType);
+    const riskArea = document.getElementById("update-inaction-risk");
+    if (riskArea) {
+      riskArea.value = suggestion.risk;
+      riskArea.focus();
+      this.showToast(`✨ Riesgo detectado: ${suggestion.category}`, "info");
+    }
+  }
+
+  /* ==========================================
+     INFORME TÉCNICO Y PRESUPUESTO FORMAL
+     ========================================== */
+  showTechnicalReportModal(orderId) {
+    if (!orderId) return;
+    const order = this.orders.find(o => String(o.ID_Orden).trim() === String(orderId).trim());
+    if (!order) {
+      this.showToast(`⚠️ No se encontró la orden ${orderId}`, "warning");
+      return;
+    }
+
+    this.currentReportRecord = order;
+
+    const issueText = order.Falla_Reportada || "Sin detalle especificado";
+    const workText = order.Trabajo_Realizado || "Revisión y diagnóstico técnico general";
+    const riskText = order.Riesgo_Inaccion || this.getDiagnosticRiskSuggestion(issueText, workText, order.Tipo_Equipo).risk;
+    const totalCost = parseFloat(order.Costo_Total || 0);
+
+    const reportIdEl = document.getElementById("report-id-val");
+    const reportDateEl = document.getElementById("report-date-val");
+    const reportClientEl = document.getElementById("report-client-val");
+    const reportPhoneEl = document.getElementById("report-phone-val");
+    const reportEquipmentEl = document.getElementById("report-equipment-val");
+    const reportTechEl = document.getElementById("report-tech-val");
+    const reportIssueEl = document.getElementById("report-issue-val");
+    const reportWorkEl = document.getElementById("report-work-val");
+    const reportCostEl = document.getElementById("report-cost-val");
+    const reportRiskEl = document.getElementById("report-risk-val");
+    const reportRiskBadgeEl = document.getElementById("report-risk-badge");
+
+    if (reportIdEl) reportIdEl.textContent = order.ID_Orden;
+    if (reportDateEl) reportDateEl.textContent = order.Fecha_Ingreso || new Date().toLocaleDateString("es-ES");
+    if (reportClientEl) reportClientEl.textContent = order.Cliente || "Consumidor Final";
+    if (reportPhoneEl) reportPhoneEl.textContent = this.formatDisplayPhone(order.Telefono);
+    if (reportEquipmentEl) reportEquipmentEl.textContent = `${order.Tipo_Equipo || ''} ${order.Marca_Modelo || ''}`.trim();
+    if (reportTechEl) reportTechEl.textContent = order.Tecnico_Responsable || "Principal";
+    if (reportIssueEl) reportIssueEl.textContent = issueText;
+    if (reportWorkEl) reportWorkEl.textContent = workText;
+    if (reportCostEl) reportCostEl.textContent = `$${totalCost.toFixed(2)}`;
+    if (reportRiskEl) reportRiskEl.textContent = riskText;
+
+    const suggestion = this.getDiagnosticRiskSuggestion(issueText, workText, order.Tipo_Equipo);
+    if (reportRiskBadgeEl) reportRiskBadgeEl.textContent = suggestion.riskShort || "Riesgo de daño mayor";
+
+    const modal = document.getElementById("modal-technical-report");
+    if (modal) modal.classList.add("active");
+  }
+
+  sendWhatsAppQuoteWithRisk() {
+    const order = this.currentReportRecord;
+    if (!order) return;
+
+    const cleanPhone = this.formatPhoneForWhatsApp(order.Telefono);
+    if (!cleanPhone || cleanPhone.length < 10) {
+      this.showToast("⚠️ Número de teléfono no válido para WhatsApp (ej: 0991234567).", "warning");
+      return;
+    }
+
+    const cleanClient = order.Cliente || "Estimado/a cliente";
+    const cleanEquipment = String(order.Tipo_Equipo || "Equipo").replace(/[^\p{L}\p{N}\s\/\-\.]/gu, "").trim();
+    const issueText = order.Falla_Reportada || "Revisión técnica";
+    const workText = order.Trabajo_Realizado || "Mantenimiento / Reparación";
+    const totalCost = `$${parseFloat(order.Costo_Total || 0).toFixed(2)}`;
+    const riskText = order.Riesgo_Inaccion || this.getDiagnosticRiskSuggestion(issueText, workText, order.Tipo_Equipo).risk;
+
+    const msg = `Hola *${cleanClient}*, le saludamos cordialmente de *COMPUKIT*.\n\n` +
+      `Adjuntamos el informe de revisión técnica y presupuesto para su *${cleanEquipment}*:\n\n` +
+      `🔍 *Diagnóstico Confirmado:* ${issueText}\n` +
+      `🛠️ *Solución / Trabajo Propuesto:* ${workText}\n` +
+      `💵 *Inversión de Reparación Hoy:* *${totalCost}*\n\n` +
+      `⚠️ *Advertencia Técnica (Riesgo si no se repara a tiempo):*\n${riskText}\n\n` +
+      `¿Desea que procedamos con el trabajo para dejar su equipo listo? Quedamos a la espera de su confirmación. ¡Muchas gracias!`;
+
+    const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, "_blank");
+  }
+
+  downloadTechnicalReportPDF() {
+    if (!window.jspdf) {
+      this.showToast("⏳ El generador de PDF se está cargando...", "info");
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const rec = this.currentReportRecord;
+    if (!rec) return;
+
+    const cleanClient = this.cleanTextForTicket(rec.Cliente) || "Consumidor Final";
+    const cleanPhone = this.formatDisplayPhone(rec.Telefono) || "S/N";
+    const cleanEq = `${this.cleanTextForTicket(rec.Tipo_Equipo)} - ${this.cleanTextForTicket(rec.Marca_Modelo)}`.trim();
+    const cleanAcc = this.cleanTextForTicket(rec.Accesorios) || "Ninguno";
+    const cleanIssue = this.cleanTextForTicket(rec.Falla_Reportada) || "Revisión técnica";
+    const cleanWork = this.cleanTextForTicket(rec.Trabajo_Realizado) || "Diagnóstico y mantenimiento preventivo";
+    const rawRisk = rec.Riesgo_Inaccion || this.getDiagnosticRiskSuggestion(rec.Falla_Reportada, rec.Trabajo_Realizado, rec.Tipo_Equipo).risk;
+    const cleanRisk = this.cleanTextForTicket(rawRisk);
+    const costNum = parseFloat(rec.Costo_Total || 0);
+
+    let y = 14;
+
+    // ENCABEZADO SUPERIOR
+    doc.setFillColor(37, 99, 235); // Color primario #2563eb
+    doc.rect(15, y, 180, 14, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(255, 255, 255);
+    doc.text("COMPUKIT - INFORME TECNICO Y PRESUPUESTO", 105, y + 9, { align: "center" });
+    y += 20;
+
+    // METADATOS (FECHA Y ORDEN)
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text(`N Orden: ${rec.ID_Orden}`, 15, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Fecha de Emision: ${rec.Fecha_Ingreso || new Date().toLocaleString()}`, 100, y);
+    doc.text(`Tecnico a Cargo: ${rec.Tecnico_Responsable || "Principal"}`, 15, y + 5);
+    y += 10;
+
+    // CUADRO DE DATOS DEL CLIENTE Y EQUIPO
+    doc.setFillColor(245, 247, 250);
+    doc.rect(15, y, 180, 24, 'F');
+    doc.setDrawColor(200, 210, 225);
+    doc.rect(15, y, 180, 24);
+
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("Cliente:", 18, y + 6);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${cleanClient}   (Tel: ${cleanPhone})`, 38, y + 6);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Equipo:", 18, y + 13);
+    doc.setFont("helvetica", "normal");
+    doc.text(cleanEq, 38, y + 13);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Accesorios:", 18, y + 20);
+    doc.setFont("helvetica", "normal");
+    doc.text(cleanAcc, 42, y + 20);
+    y += 30;
+
+    // SECCIÓN 1: DIAGNÓSTICO CONFIRMADO
+    doc.setFillColor(235, 242, 255);
+    doc.rect(15, y, 180, 7, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(37, 99, 235);
+    doc.text("1. DIAGNOSTICO TECNICO CONFIRMADO", 18, y + 5);
+    y += 11;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(15, 23, 42);
+    const splitIssue = doc.splitTextToSize(cleanIssue, 174);
+    doc.text(splitIssue, 18, y);
+    y += Math.max(splitIssue.length * 4.5, 8) + 4;
+
+    // SECCIÓN 2: SOLUCIÓN TÉCNICA PROPUESTA
+    doc.setFillColor(236, 253, 245);
+    doc.rect(15, y, 180, 7, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(22, 163, 74);
+    doc.text("2. SOLUCION TECNICA Y REPUESTOS RECOMENDADOS", 18, y + 5);
+    y += 11;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(15, 23, 42);
+    const splitWork = doc.splitTextToSize(cleanWork, 174);
+    doc.text(splitWork, 18, y);
+    y += Math.max(splitWork.length * 4.5, 8) + 6;
+
+    // SECCIÓN 3: CUADRO COMPARATIVO (INVERSIÓN HOY VS COSTO POR AGRAVAMIENTO)
+    doc.setFillColor(254, 242, 242);
+    doc.rect(15, y, 180, 7, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(220, 38, 38);
+    doc.text("3. ANALISIS ECONOMICO Y RIESGO POR INACCION", 18, y + 5);
+    y += 11;
+
+    // Caja Verde (Inversión Hoy)
+    doc.setFillColor(240, 253, 244);
+    doc.rect(15, y, 86, 22, 'F');
+    doc.setDrawColor(34, 197, 94);
+    doc.rect(15, y, 86, 22);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(22, 163, 74);
+    doc.text("[+] INVERSION REPARACION HOY", 58, y + 6, { align: "center" });
+    doc.setFontSize(14);
+    doc.text(`$${costNum.toFixed(2)}`, 58, y + 14, { align: "center" });
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "normal");
+    doc.text("Incluye garantia de servicio y mano de obra", 58, y + 19, { align: "center" });
+
+    // Caja Roja (Costo por Agravamiento)
+    doc.setFillColor(254, 242, 242);
+    doc.rect(109, y, 86, 22, 'F');
+    doc.setDrawColor(239, 68, 68);
+    doc.rect(109, y, 86, 22);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(220, 38, 38);
+    doc.text("[-] RIESGO POR POSTERGAR", 152, y + 6, { align: "center" });
+    doc.setFontSize(9);
+    const badgeRisk = this.cleanTextForTicket(this.getDiagnosticRiskSuggestion(rec.Falla_Reportada, rec.Trabajo_Realizado, rec.Tipo_Equipo).riskShort);
+    doc.text(badgeRisk, 152, y + 13, { align: "center" });
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "normal");
+    doc.text("Dano severo a componentes asociados", 152, y + 19, { align: "center" });
+
+    y += 27;
+
+    // DETALLE DE ADVERTENCIA DE RIESGO
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(220, 38, 38);
+    doc.text("Advertencia Tecnica:", 18, y);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(15, 23, 42);
+    const splitRisk = doc.splitTextToSize(cleanRisk, 145);
+    doc.text(splitRisk, 53, y);
+    y += Math.max(splitRisk.length * 4.5, 10) + 12;
+
+    // TÉRMINOS Y VALIDEZ
+    doc.setDrawColor(200, 200, 200);
+    doc.line(15, y, 195, y);
+    y += 6;
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 116, 139);
+    doc.text("Presupuesto valido por 15 dias a partir de su emision. Los precios incluyen repuestos especificados.", 105, y, { align: "center" });
+    y += 18;
+
+    // FIRMAS
+    doc.line(25, y, 85, y);
+    doc.line(125, y, 185, y);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text("Firma del Tecnico / Sello Compukit", 55, y + 5, { align: "center" });
+    doc.text("Firma de Aprobacion del Cliente", 155, y + 5, { align: "center" });
+
+    doc.save(`Informe_Tecnico_${rec.ID_Orden}.pdf`);
   }
 
   escapeHTML(str) {
