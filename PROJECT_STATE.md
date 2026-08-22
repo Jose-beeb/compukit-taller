@@ -93,3 +93,4 @@ Compukit/
 - [x] Corrección y optimización del buscador de taller (soporte para acentos, búsqueda por múltiples palabras, tipos de datos seguros y compatibilidad total con teclados virtuales móviles).
 - [x] Flujo de avance rápido de estados en 1 toque en tarjetas de taller y semáforo de alertas urgentes por tiempo estancado (12h, 24h y 48h).
 - [x] Modal de éxito post-ingreso con envío instantáneo de Comprobante Digital por WhatsApp y descarga dual de PDF (Copia Cliente vs. Ticket Doble).
+- [x] Corrección en mensaje de WhatsApp en estado 'Listo' para desglosar el Costo Total, Abono recibido y Saldo Pendiente real a cancelar.

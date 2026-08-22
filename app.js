@@ -1483,10 +1483,10 @@ class CompukitApp {
   sendWhatsAppByOrderId(orderId) {
     const order = this.orders.find(o => String(o.ID_Orden).trim() === String(orderId).trim());
     if (!order) return;
-    this.sendWhatsApp(order.Telefono, order.Cliente, order.Tipo_Equipo, order.Estado, order.Costo_Total, order.Falla_Reportada, order.Trabajo_Realizado, order.Riesgo_Inaccion);
+    this.sendWhatsApp(order.Telefono, order.Cliente, order.Tipo_Equipo, order.Estado, order.Costo_Total, order.Falla_Reportada, order.Trabajo_Realizado, order.Riesgo_Inaccion, order.Abono);
   }
 
-  sendWhatsApp(phone, name, equipment, status, cost, issue, workDone, inactionRisk = "") {
+  sendWhatsApp(phone, name, equipment, status, cost, issue, workDone, inactionRisk = "", advancePaid = 0) {
     const cleanPhone = this.formatPhoneForWhatsApp(phone);
     if (!cleanPhone || cleanPhone.length < 10) {
       this.showToast("⚠️ Número de teléfono no válido para WhatsApp (ej: 0991234567).", "warning");
@@ -1496,7 +1496,10 @@ class CompukitApp {
     // Limpiar posibles emojis rotos o caracteres incompatibles en el tipo de equipo
     const cleanEquipment = String(equipment || "Equipo").replace(/[^\p{L}\p{N}\s\/\-\.]/gu, "").trim();
 
-    const formattedCost = `$${parseFloat(cost || 0).toFixed(2)}`;
+    const totalNum = parseFloat(cost || 0);
+    const advanceNum = parseFloat(advancePaid || 0);
+    const pendingNum = Math.max(0, totalNum - advanceNum);
+    const formattedCost = `$${totalNum.toFixed(2)}`;
     const issueDetail = issue ? `\n*Diagnóstico / Falla:* ${issue}` : "";
     const workDetail = workDone ? `\n*Solución / Trabajo:* ${workDone}` : "";
     
@@ -1509,13 +1512,20 @@ class CompukitApp {
 
     let msg = "";
     if (status === "Esperando Aprobación") {
-      msg = `Hola ${name}, le saludamos de *COMPUKIT*.\n\nHemos finalizado la revisión y diagnóstico de su *${cleanEquipment}*:\n${issueDetail}${workDetail}\n\n*Inversión de Reparación Hoy:* *${formattedCost}*${riskDetail}\n\n¿Desea que procedamos con el trabajo? Por favor nos confirma para iniciar.`;
+      const advanceDetail = advanceNum > 0 ? ` (Abono previo recibido: $${advanceNum.toFixed(2)})` : "";
+      msg = `Hola ${name}, le saludamos de *COMPUKIT*.\n\nHemos finalizado la revisión y diagnóstico de su *${cleanEquipment}*:\n${issueDetail}${workDetail}\n\n*Inversión de Reparación Hoy:* *${formattedCost}*${advanceDetail}${riskDetail}\n\n¿Desea que procedamos con el trabajo? Por favor nos confirma para iniciar.`;
     } else if (status === "En Diagnóstico") {
       msg = `Hola ${name}, le saludamos de *COMPUKIT*. Le informamos que su *${cleanEquipment}* se encuentra actualmente en proceso de *revisión y diagnóstico técnico*. Le notificaremos apenas tengamos el informe detallado y costo.`;
     } else if (status === "En Reparación") {
       msg = `Hola ${name}, le saludamos de *COMPUKIT*. Le confirmamos que su *${cleanEquipment}* ya se encuentra *en proceso de reparación*.`;
     } else if (status === "Listo") {
-      msg = `Hola ${name}, le saludamos de *COMPUKIT*. ¡Su *${cleanEquipment}* ya está *LISTO* para retirar!\n\n*Total a pagar:* *${formattedCost}*\n\nPuede pasar retirándolo en nuestro horario habitual.`;
+      if (advanceNum > 0 && pendingNum > 0) {
+        msg = `Hola ${name}, le saludamos de *COMPUKIT*. ¡Su *${cleanEquipment}* ya está *LISTO* para retirar!\n\n📋 *Detalle de Pago:*\n💵 *Costo Total:* $${totalNum.toFixed(2)}\n✅ *Abono recibido:* $${advanceNum.toFixed(2)}\n🔴 *Saldo pendiente a cancelar:* *$${pendingNum.toFixed(2)}*\n\nPuede pasar retirándolo en nuestro local en el horario habitual. ¡Muchas gracias!`;
+      } else if (advanceNum > 0 && pendingNum <= 0) {
+        msg = `Hola ${name}, le saludamos de *COMPUKIT*. ¡Su *${cleanEquipment}* ya está *LISTO* para retirar!\n\n📋 *Detalle de Pago:*\n💵 *Total del servicio:* $${totalNum.toFixed(2)} *(Pagado completamente)*\n✅ *Saldo a cancelar:* *$0.00*\n\nPuede pasar retirándolo en nuestro local en el horario habitual. ¡Muchas gracias!`;
+      } else {
+        msg = `Hola ${name}, le saludamos de *COMPUKIT*. ¡Su *${cleanEquipment}* ya está *LISTO* para retirar!\n\n💵 *Total a cancelar:* *$${formattedCost}*\n\nPuede pasar retirándolo en nuestro local en el horario habitual. ¡Muchas gracias!`;
+      }
     } else if (status === "Entregado") {
       msg = `Hola ${name}, gracias por confiar en *COMPUKIT*. Le confirmamos la entrega conforme de su *${cleanEquipment}*. ¡Estamos a la orden!`;
     } else {
