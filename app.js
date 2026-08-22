@@ -1198,9 +1198,13 @@ class CompukitApp {
       const safeClient = this.escapeHTML(r.Cliente || "Sin Nombre");
       const displayPhone = this.formatDisplayPhone(r.Telefono || "");
       const safeDriveUrl = r.Fotos_Drive_URL || "";
+      const staleAlertHtml = this.calculateStaleAlert(r);
+      const quickAdvanceBtnHtml = this.getQuickAdvanceButtonHtml(r, safeId);
 
       return `
       <div class="equipment-card">
+        ${staleAlertHtml}
+
         <div class="card-top">
           <div>
             <div class="client-name">👤 ${safeClient}</div>
@@ -1247,6 +1251,8 @@ class CompukitApp {
             ${r._sync_status === "Pendiente" ? "⏳ Guardado local" : "☁️ Sincronizado"}
           </span>
         </div>
+
+        ${quickAdvanceBtnHtml}
 
         <div class="card-actions">
           <button class="btn btn-secondary btn-sm" onclick="window.app && window.app.openUpdateModal('${safeId}')">
@@ -1844,6 +1850,158 @@ class CompukitApp {
   }
 
   /* ==========================================
+     FLUJO RÁPIDO DE ESTADOS Y ALERTAS DE TIEMPO (SEMÁFORO URGENTE)
+     ========================================== */
+  parseOrderDate(dateStr) {
+    if (!dateStr) return null;
+    if (dateStr instanceof Date) return dateStr;
+    const s = String(dateStr).trim();
+    
+    // 1. Probar parse nativo directo
+    let d = new Date(s);
+    if (!isNaN(d.getTime()) && d.getFullYear() > 2000) return d;
+
+    // 2. Manejar formato "dd/MM/yyyy, hh:mm:ss" o "dd/MM/yyyy hh:mm:ss"
+    const matchSlash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[,\s]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+    if (matchSlash) {
+      const day = parseInt(matchSlash[1], 10);
+      const month = parseInt(matchSlash[2], 10) - 1;
+      const year = parseInt(matchSlash[3], 10);
+      const hours = parseInt(matchSlash[4] || "0", 10);
+      const mins = parseInt(matchSlash[5] || "0", 10);
+      const secs = parseInt(matchSlash[6] || "0", 10);
+      d = new Date(year, month, day, hours, mins, secs);
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    // 3. Manejar formato "yyyy-MM-dd hh:mm:ss"
+    const matchHyphen = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[,\s]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+    if (matchHyphen) {
+      const year = parseInt(matchHyphen[1], 10);
+      const month = parseInt(matchHyphen[2], 10) - 1;
+      const day = parseInt(matchHyphen[3], 10);
+      const hours = parseInt(matchHyphen[4] || "0", 10);
+      const mins = parseInt(matchHyphen[5] || "0", 10);
+      const secs = parseInt(matchHyphen[6] || "0", 10);
+      d = new Date(year, month, day, hours, mins, secs);
+      if (!isNaN(d.getTime())) return d;
+    }
+
+    return null;
+  }
+
+  calculateStaleAlert(order) {
+    if (!order) return "";
+    const status = String(order.Estado || "Recibido").trim();
+    if (status === "Entregado") return "";
+
+    const dateObj = this.parseOrderDate(order.Ultima_Actualizacion || order.Fecha_Ingreso);
+    if (!dateObj) return "";
+
+    const now = Date.now();
+    const hoursElapsed = Math.max(0, (now - dateObj.getTime()) / (1000 * 60 * 60));
+
+    // Umbral 1: >= 12h en Recibido sin revisar
+    if (status === "Recibido" && hoursElapsed >= 12) {
+      const h = Math.floor(hoursElapsed);
+      const label = h >= 24 ? `+${Math.floor(h / 24)} días` : `+${h}h`;
+      return `<div class="stale-badge warning">⏳ En espera de revisión (${label})</div>`;
+    }
+
+    // Umbral 2: >= 24h en Esperando Aprobación
+    if (status === "Esperando Aprobación" && hoursElapsed >= 24) {
+      const days = Math.floor(hoursElapsed / 24);
+      const label = days >= 1 ? `+${days} ${days === 1 ? 'día' : 'días'}` : `+${Math.floor(hoursElapsed)}h`;
+      return `<div class="stale-badge">📞 Esperando respuesta del cliente (${label})</div>`;
+    }
+
+    // Umbral 3: >= 48h en Listo sin retirar
+    if (status === "Listo" && hoursElapsed >= 48) {
+      const days = Math.floor(hoursElapsed / 24);
+      return `<div class="stale-badge">📦 Listo para retiro (+${days} días)</div>`;
+    }
+
+    return "";
+  }
+
+  getQuickAdvanceButtonHtml(order, safeId) {
+    const status = String(order.Estado || "Recibido").trim();
+    switch (status) {
+      case "Recibido":
+        return `<button type="button" class="btn-quick-advance" data-stage="to-diag" onclick="window.app && window.app.quickAdvanceStatus('${safeId}')">🔵 Iniciar Diagnóstico ➔</button>`;
+      case "En Diagnóstico":
+        return `<button type="button" class="btn-quick-advance" data-stage="to-quote" onclick="window.app && window.app.quickAdvanceStatus('${safeId}')">🟣 Diagnóstico Listo (Cotizar) ➔</button>`;
+      case "Esperando Aprobación":
+        return `<button type="button" class="btn-quick-advance" data-stage="to-repair" onclick="window.app && window.app.quickAdvanceStatus('${safeId}')">🟠 Iniciar Reparación (Aprobado) ➔</button>`;
+      case "En Reparación":
+        return `<button type="button" class="btn-quick-advance" data-stage="to-ready" onclick="window.app && window.app.quickAdvanceStatus('${safeId}')">🟢 Marcar LISTO para Retiro ➔</button>`;
+      case "Listo":
+        return `<button type="button" class="btn-quick-advance" data-stage="to-deliver" onclick="window.app && window.app.openUpdateModal('${safeId}')">⚪ Entregar y Cobrar ➔</button>`;
+      default:
+        return "";
+    }
+  }
+
+  quickAdvanceStatus(orderId) {
+    const order = this.orders.find(o => String(o.ID_Orden).trim() === String(orderId).trim());
+    if (!order) return;
+
+    const currentStatus = String(order.Estado || "Recibido").trim();
+    let nextStatus = "";
+    let toastMsg = "";
+
+    if (currentStatus === "Recibido") {
+      nextStatus = "En Diagnóstico";
+      toastMsg = `🔵 Orden ${order.ID_Orden}: Pasó a 'En Diagnóstico'`;
+    } else if (currentStatus === "En Diagnóstico") {
+      const totalCost = parseFloat(order.Costo_Total || 0);
+      const workDone = String(order.Trabajo_Realizado || "").trim();
+      if (totalCost <= 0 || !workDone) {
+        this.openUpdateModal(orderId);
+        this.showToast("ℹ️ Ingresa el costo y detalle de trabajo para cotizar al cliente.", "info");
+        return;
+      }
+      nextStatus = "Esperando Aprobación";
+      toastMsg = `🟣 Orden ${order.ID_Orden}: Diagnóstico listo para aprobación`;
+    } else if (currentStatus === "Esperando Aprobación") {
+      nextStatus = "En Reparación";
+      toastMsg = `🟠 Orden ${order.ID_Orden}: Trabajo aprobado, en reparación`;
+    } else if (currentStatus === "En Reparación") {
+      nextStatus = "Listo";
+      toastMsg = `🟢 Orden ${order.ID_Orden}: ¡Equipo LISTO para entregar!`;
+    } else if (currentStatus === "Listo") {
+      this.openUpdateModal(orderId);
+      return;
+    }
+
+    if (nextStatus) {
+      const nowStr = new Date().toLocaleString("es-ES");
+      order.Estado = nextStatus;
+      order.Ultima_Actualizacion = nowStr;
+      order._sync_status = "Pendiente";
+      this.saveOrdersLocal();
+
+      this.queueSync({
+        action: "update_status",
+        ID_Orden: order.ID_Orden,
+        Cliente: order.Cliente,
+        Estado: nextStatus,
+        Falla_Reportada: order.Falla_Reportada,
+        Trabajo_Realizado: order.Trabajo_Realizado,
+        Riesgo_Inaccion: order.Riesgo_Inaccion,
+        Tecnico_Responsable: order.Tecnico_Responsable,
+        Costo_Total: order.Costo_Total,
+        Abono: order.Abono,
+        Fecha_Entrega: order.Fecha_Entrega || ""
+      });
+
+      this.renderEquipmentList();
+      this.renderStats();
+      this.showToast(toastMsg, "success");
+    }
+  }
+
+  /* ==========================================
      MOTOR INTELIGENTE DE RIESGOS Y PRESUPUESTOS (DIAGNOSTIC ADVISOR)
      ========================================== */
   getDiagnosticRiskSuggestion(issueText = "", workText = "", eqType = "") {
@@ -2028,6 +2186,30 @@ class CompukitApp {
 
     const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
     window.open(waUrl, "_blank");
+
+    // Transición automática a 'Esperando Aprobación' si estaba en etapas iniciales
+    const curStatus = String(order.Estado || "Recibido").trim();
+    if (curStatus === "Recibido" || curStatus === "En Diagnóstico") {
+      order.Estado = "Esperando Aprobación";
+      order.Ultima_Actualizacion = new Date().toLocaleString("es-ES");
+      order._sync_status = "Pendiente";
+      this.saveOrdersLocal();
+      this.queueSync({
+        action: "update_status",
+        ID_Orden: order.ID_Orden,
+        Cliente: order.Cliente,
+        Estado: "Esperando Aprobación",
+        Falla_Reportada: order.Falla_Reportada,
+        Trabajo_Realizado: order.Trabajo_Realizado,
+        Riesgo_Inaccion: order.Riesgo_Inaccion,
+        Tecnico_Responsable: order.Tecnico_Responsable,
+        Costo_Total: order.Costo_Total,
+        Abono: order.Abono
+      });
+      this.renderEquipmentList();
+      this.renderStats();
+      this.showToast(`🟣 Orden ${order.ID_Orden}: Estado actualizado a 'Esperando Aprobación'`, "info");
+    }
   }
 
   downloadTechnicalReportPDF() {

@@ -676,6 +676,79 @@ textarea.form-control {
   flex-wrap: wrap;
 }
 
+/* Botón de Avance Rápido de 1 Toque */
+.btn-quick-advance {
+  width: 100%;
+  min-height: 52px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  border-radius: var(--radius-md);
+  border: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  margin-bottom: 4px;
+}
+
+.btn-quick-advance:active {
+  transform: scale(0.97);
+}
+
+.btn-quick-advance[data-stage="to-diag"] {
+  background-color: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.btn-quick-advance[data-stage="to-quote"] {
+  background-color: #f3e8ff;
+  color: #7e22ce;
+  border-color: #a855f7;
+}
+
+.btn-quick-advance[data-stage="to-repair"] {
+  background-color: #fef08a;
+  color: #854d0e;
+  border-color: #ca8a04;
+}
+
+.btn-quick-advance[data-stage="to-ready"] {
+  background-color: var(--success-light);
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.btn-quick-advance[data-stage="to-deliver"] {
+  background-color: #ecfdf5;
+  color: #065f46;
+  border-color: #10b981;
+}
+
+/* Insignias de Alerta por Tiempo Estancado (Semáforo Urgente) */
+.stale-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--danger-light);
+  color: var(--danger);
+  border: 1.5px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.stale-badge.warning {
+  background-color: var(--warning-light);
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
 .btn-sm {
   min-height: 46px;
   font-size: 0.95rem;

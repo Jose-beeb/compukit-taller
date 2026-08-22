@@ -91,3 +91,4 @@ Compukit/
 - [x] Generador de Informe Técnico y Presupuesto formal en PDF (A4) con cuadro comparativo de inversión vs. riesgo por inacción y firmas.
 - [x] Mensajería persuasiva de WhatsApp con cotizaciones completas incluyendo advertencias técnicas y costos por postergación.
 - [x] Corrección y optimización del buscador de taller (soporte para acentos, búsqueda por múltiples palabras, tipos de datos seguros y compatibilidad total con teclados virtuales móviles).
+- [x] Flujo de avance rápido de estados en 1 toque en tarjetas de taller y semáforo de alertas urgentes por tiempo estancado (12h, 24h y 48h).
