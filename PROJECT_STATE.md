@@ -89,3 +89,4 @@ Compukit/
 - [x] Actualización de `PROJECT_STATE.md` con el esquema completo de 3 pestañas.
 - [x] Gestión de Servicios y Equipos Editables (ej: *Impresión de Planos*, *Mantenimiento Preventivo*, etc.) con persistencia en `localStorage`.
 - [x] Documentación y manuales (`MANUAL_USUARIO.md`, `PROMPT_CANVA_MANUAL_VISUAL.md`, `PROJECT_STATE.md`, `AGENTS.md`) completamente sincronizados y verificados.
+- [x] Corrección y optimización del buscador de taller (soporte para acentos, búsqueda por múltiples palabras, tipos de datos seguros y compatibilidad total con teclados virtuales móviles).

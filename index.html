@@ -212,7 +212,7 @@
 
       <!-- Buscador y Filtro por Técnico -->
       <div class="search-filter-bar" style="display: flex; gap: 8px; flex-wrap: wrap;">
-        <input type="text" id="search-input" class="form-control" style="flex: 1; min-width: 180px;" placeholder="🔍 Buscar cliente, teléfono o marca..." onkeyup="window.app && window.app.filterRecords()">
+        <input type="text" id="search-input" class="form-control" style="flex: 1; min-width: 180px;" placeholder="🔍 Buscar cliente, teléfono o marca..." oninput="window.app && window.app.filterRecords()" onkeyup="window.app && window.app.filterRecords()">
         <select id="filter-technician-select" class="form-control" style="width: auto; min-width: 160px; font-weight: bold;" onchange="window.app && window.app.filterRecords()">
           <option value="TODOS">👨‍🔧 Todos los Técnicos</option>
           <!-- Se cargan dinámicamente -->

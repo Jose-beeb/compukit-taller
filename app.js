@@ -915,9 +915,10 @@ class CompukitApp {
 
     const remoteList = remoteOrders.slice().reverse().map(o => ({
       ...o,
-      Costo_Total: parseFloat(o.Costo_Total) || 0,
-      Abono: parseFloat(o.Abono) || 0,
-      Saldo_Pendiente: parseFloat(o.Saldo_Pendiente) || 0,
+      ID_Orden: String(o.ID_Orden || "").trim(),
+      Costo_Total: parseFloat(String(o.Costo_Total || 0).replace(",", ".")) || 0,
+      Abono: parseFloat(String(o.Abono || 0).replace(",", ".")) || 0,
+      Saldo_Pendiente: parseFloat(String(o.Saldo_Pendiente || 0).replace(",", ".")) || 0,
       _sync_status: "Sincronizado"
     }));
 
@@ -931,7 +932,8 @@ class CompukitApp {
 
     // Sobreescribir con las locales pendientes para no perder cambios recientes
     pendingLocalOrders.forEach(local => {
-      if (local.ID_Orden) mergedMap.set(local.ID_Orden, local);
+      const localId = String(local.ID_Orden || "").trim();
+      if (localId) mergedMap.set(localId, local);
     });
 
     this.orders = Array.from(mergedMap.values()).sort((a, b) => {
@@ -1099,6 +1101,14 @@ class CompukitApp {
   /* ==========================================
      RENDERIZADO Y FILTRADO
      ========================================== */
+  normalizeSearchText(str) {
+    return String(str || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
   setFilterStatus(status, chipBtn) {
     this.activeFilter = status;
     if (chipBtn) {
@@ -1116,30 +1126,56 @@ class CompukitApp {
     const container = document.getElementById("equipment-list");
     if (!container) return;
 
-    const searchTerm = (document.getElementById("search-input")?.value || "").toLowerCase();
-    const selectedTechFilter = document.getElementById("filter-technician-select")?.value || "TODOS";
+    const rawSearch = document.getElementById("search-input")?.value || "";
+    const searchNormalized = this.normalizeSearchText(rawSearch);
+    const searchTokens = searchNormalized ? searchNormalized.split(/\s+/).filter(Boolean) : [];
+    const searchPhoneDigits = String(rawSearch).replace(/\D/g, "");
+
+    const selectedTechFilter = String(document.getElementById("filter-technician-select")?.value || "TODOS").trim();
 
     let filtered = this.orders.filter(r => {
-      const matchSearch =
-        (r.Cliente || "").toLowerCase().includes(searchTerm) ||
-        (r.Telefono || "").toLowerCase().includes(searchTerm) ||
-        (r.Tipo_Equipo || "").toLowerCase().includes(searchTerm) ||
-        (r.Marca_Modelo || "").toLowerCase().includes(searchTerm) ||
-        (r.Falla_Reportada || "").toLowerCase().includes(searchTerm) ||
-        (r.Tecnico_Responsable || "").toLowerCase().includes(searchTerm) ||
-        (r.ID_Orden || "").toLowerCase().includes(searchTerm);
-
-      if (!matchSearch) return false;
-
-      if (selectedTechFilter !== "TODOS" && (r.Tecnico_Responsable || "Principal") !== selectedTechFilter) {
+      // 1. Filtro por Técnico
+      const currentTech = String(r.Tecnico_Responsable || "Principal").trim();
+      if (selectedTechFilter !== "TODOS" && currentTech.toLowerCase() !== selectedTechFilter.toLowerCase()) {
         return false;
       }
 
-      if (this.activeFilter === "TODOS") return true;
+      // 2. Filtro por Estado
+      const currentStatus = String(r.Estado || "Recibido").trim();
       if (this.activeFilter === "EN_TALLER") {
-        return r.Estado !== "Entregado";
+        if (currentStatus === "Entregado") return false;
+      } else if (this.activeFilter !== "TODOS") {
+        if (currentStatus.toLowerCase() !== this.activeFilter.toLowerCase()) return false;
       }
-      return r.Estado === this.activeFilter;
+
+      // 3. Filtro por Texto de Búsqueda
+      if (searchTokens.length > 0) {
+        const clientNorm = this.normalizeSearchText(r.Cliente);
+        const phoneRaw = String(r.Telefono || "");
+        const phoneDigits = phoneRaw.replace(/\D/g, "");
+        const phoneDisplay = this.normalizeSearchText(this.formatDisplayPhone(phoneRaw));
+        const eqTypeNorm = this.normalizeSearchText(r.Tipo_Equipo);
+        const brandNorm = this.normalizeSearchText(r.Marca_Modelo);
+        const issueNorm = this.normalizeSearchText(r.Falla_Reportada);
+        const workNorm = this.normalizeSearchText(r.Trabajo_Realizado);
+        const techNorm = this.normalizeSearchText(r.Tecnico_Responsable);
+        const idNorm = this.normalizeSearchText(r.ID_Orden);
+        const accNorm = this.normalizeSearchText(r.Accesorios);
+
+        const fullRowText = `${clientNorm} ${phoneDisplay} ${phoneDigits} ${eqTypeNorm} ${brandNorm} ${issueNorm} ${workNorm} ${techNorm} ${idNorm} ${accNorm}`;
+
+        // Todos los términos de búsqueda deben coincidir
+        const allTokensMatch = searchTokens.every(token => fullRowText.includes(token));
+        
+        // Coincidencia también si busca por dígitos numéricos de teléfono
+        const phoneMatch = searchPhoneDigits.length >= 3 && phoneDigits.includes(searchPhoneDigits);
+
+        if (!allTokensMatch && !phoneMatch) {
+          return false;
+        }
+      }
+
+      return true;
     });
 
     if (filtered.length === 0) {
@@ -1732,7 +1768,7 @@ class CompukitApp {
     doc.setDrawColor(100, 100, 100);
     doc.line(10, 142, 200, 142);
     doc.setFontSize(8);
-    doc.text("✂️ LINEA DE CORTE ENTREGA / TALLER ✂️", 105, 141, { align: "center" });
+    doc.text("- - - [ LINEA DE CORTE ENTREGA / TALLER ] - - -", 105, 141, { align: "center" });
     doc.setLineDashPattern([], 0); // Restaurar línea sólida
 
     // COPIA 2: TALLER (Mitad Inferior)
@@ -1742,12 +1778,12 @@ class CompukitApp {
     const stickerY = 247;
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
-    doc.text("--- ✂️ ETIQUETAS RECORTABLES PARA EQUIPO Y ACCESORIOS (3 ETIQUETAS) ✂️ ---", 105, stickerY - 2, { align: "center" });
+    doc.text("--- ETIQUETAS RECORTABLES PARA EQUIPO Y ACCESORIOS (3 ETIQUETAS) ---", 105, stickerY - 2, { align: "center" });
 
     const stickers = [
-      { label: "🏷️ 1: EQUIPO", x: 15 },
-      { label: "🔌 2: CARGADOR", x: 76.5 },
-      { label: "📦 3: ACCESORIOS", x: 138 }
+      { label: "1: EQUIPO", x: 15 },
+      { label: "2: CARGADOR", x: 76.5 },
+      { label: "3: ACCESORIOS", x: 138 }
     ];
 
     stickers.forEach((st) => {
