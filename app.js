@@ -660,20 +660,8 @@ class CompukitApp {
 
     this.showToast(`✅ ¡Equipo ${orderId} guardado exitosamente!`, "success");
 
-    // Resetear formulario
-    document.getElementById("form-ingreso").reset();
-    this.selectedPhotoBase64 = "";
-    const previewContainer = document.getElementById("photo-preview");
-    if (previewContainer) previewContainer.style.display = "none";
-    this.nextStep(1);
-
-    // Ir a la pestaña del Taller
-    const navItems = document.querySelectorAll('.nav-item');
-      if (navItems.length > 1) {
-        this.switchView('view-taller', navItems[1]);
-      } else {
-        this.switchView('view-taller');
-      }
+    // 3. Abrir modal de éxito y comprobante digital inmediatamente
+    this.showEntrySuccessModal(orderObj);
   }
 
   saveStatusUpdate() {
@@ -1685,6 +1673,247 @@ class CompukitApp {
     if (modalEl) {
       modalEl.classList.add("active");
     }
+  }
+
+  showEntrySuccessModal(order) {
+    if (!order) return;
+    this.currentSuccessRecord = order;
+    this.currentTicketRecord = order;
+
+    const idEl = document.getElementById("entry-success-id");
+    const clientEl = document.getElementById("entry-success-client");
+    const phoneEl = document.getElementById("entry-success-phone");
+    const eqEl = document.getElementById("entry-success-equipment");
+    const accEl = document.getElementById("entry-success-accessories");
+
+    if (idEl) idEl.textContent = order.ID_Orden || "";
+    if (clientEl) clientEl.textContent = order.Cliente || "Consumidor Final";
+    if (phoneEl) phoneEl.textContent = this.formatDisplayPhone(order.Telefono);
+    if (eqEl) eqEl.textContent = `${order.Tipo_Equipo || ''} ${order.Marca_Modelo || ''}`.trim();
+    if (accEl) accEl.textContent = order.Accesorios || "Ninguno";
+
+    const modal = document.getElementById("modal-entry-success");
+    if (modal) modal.classList.add("active");
+  }
+
+  nextClientFromModal() {
+    this.closeModal("modal-entry-success");
+    const form = document.getElementById("form-ingreso");
+    if (form) form.reset();
+    this.selectedPhotoBase64 = "";
+    const previewContainer = document.getElementById("photo-preview");
+    if (previewContainer) previewContainer.style.display = "none";
+    this.nextStep(1);
+    
+    const navItems = document.querySelectorAll('.nav-item');
+    if (navItems.length > 0) {
+      this.switchView('view-ingreso', navItems[0]);
+    } else {
+      this.switchView('view-ingreso');
+    }
+    const nameInput = document.getElementById("client-name");
+    if (nameInput) setTimeout(() => nameInput.focus(), 150);
+  }
+
+  goToWorkshopFromModal() {
+    this.closeModal("modal-entry-success");
+    const form = document.getElementById("form-ingreso");
+    if (form) form.reset();
+    this.selectedPhotoBase64 = "";
+    const previewContainer = document.getElementById("photo-preview");
+    if (previewContainer) previewContainer.style.display = "none";
+    this.nextStep(1);
+
+    const navItems = document.querySelectorAll('.nav-item');
+    if (navItems.length > 1) {
+      this.switchView('view-taller', navItems[1]);
+    } else {
+      this.switchView('view-taller');
+    }
+  }
+
+  sendWhatsAppReceipt(orderId) {
+    const order = orderId 
+      ? this.orders.find(o => String(o.ID_Orden).trim() === String(orderId).trim())
+      : (this.currentSuccessRecord || this.currentTicketRecord);
+    if (!order) return;
+
+    const cleanPhone = this.formatPhoneForWhatsApp(order.Telefono);
+    if (!cleanPhone || cleanPhone.length < 10) {
+      this.showToast("⚠️ Número de teléfono no válido para WhatsApp (ej: 0991234567).", "warning");
+      return;
+    }
+
+    const cleanClient = order.Cliente || "Estimado/a cliente";
+    const cleanEquipment = String(order.Tipo_Equipo || "Equipo").replace(/[^\p{L}\p{N}\s\/\-\.]/gu, "").trim();
+    const cleanBrand = order.Marca_Modelo || "";
+    const fullEq = `${cleanEquipment} ${cleanBrand}`.trim();
+    const accText = order.Accesorios || "Ninguno";
+    const issueText = order.Falla_Reportada || "Por diagnosticar";
+    const costTotal = `$${parseFloat(order.Costo_Total || 0).toFixed(2)}`;
+    const advance = `$${parseFloat(order.Abono || 0).toFixed(2)}`;
+    const pending = `$${parseFloat(order.Saldo_Pendiente || 0).toFixed(2)}`;
+    const tech = order.Tecnico_Responsable || "Principal";
+    const dateStr = order.Fecha_Ingreso || new Date().toLocaleString("es-ES");
+
+    const msg = `📄 *COMPROBANTE DE RECEPCIÓN TÉCNICA - COMPUKIT*\n\n` +
+      `Hola *${cleanClient}*, confirmamos el ingreso de su equipo a nuestro taller técnico:\n\n` +
+      `📋 *N° de Orden:* *${order.ID_Orden}*\n` +
+      `📅 *Fecha de Ingreso:* ${dateStr}\n` +
+      `💻 *Equipo:* ${fullEq}\n` +
+      `🔌 *Accesorios:* ${accText}\n` +
+      `🔍 *Falla Reportada:* ${issueText}\n` +
+      `👨‍🔧 *Técnico Responsable:* ${tech}\n\n` +
+      `💵 *Costo Estimado:* ${costTotal}\n` +
+      `✅ *Abono Recibido:* ${advance}\n` +
+      `🔴 *Saldo Pendiente:* *${pending}*\n\n` +
+      `📌 *Términos y Condiciones:* \n` +
+      `• El tiempo estimado de diagnóstico técnico es de 24 a 48 horas laborables.\n` +
+      `• Todo trabajo realizado y repuesto instalado cuenta con garantía de servicio.\n` +
+      `• Equipos no retirados luego de 60 días de notificados serán considerados abandonados.\n\n` +
+      `¡Muchas gracias por confiar en *COMPUKIT*!`;
+
+    const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`;
+    window.open(waUrl, "_blank");
+  }
+
+  downloadClientCopyPDF(orderId) {
+    if (!window.jspdf) {
+      this.showToast("⏳ El generador de PDF se está cargando...", "info");
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const rec = orderId 
+      ? this.orders.find(o => String(o.ID_Orden).trim() === String(orderId).trim())
+      : (this.currentTicketRecord || this.currentSuccessRecord);
+    if (!rec) return;
+
+    const cleanClient = this.cleanTextForTicket(rec.Cliente) || "Consumidor Final";
+    const cleanPhone = this.formatDisplayPhone(rec.Telefono) || "S/N";
+    const cleanEq = `${this.cleanTextForTicket(rec.Tipo_Equipo)} - ${this.cleanTextForTicket(rec.Marca_Modelo)}`.trim();
+    const cleanAcc = this.cleanTextForTicket(rec.Accesorios) || "Ninguno";
+    const cleanIssue = this.cleanTextForTicket(rec.Falla_Reportada) || "Por diagnosticar";
+    const costTotal = `$${parseFloat(rec.Costo_Total || 0).toFixed(2)}`;
+    const advance = `$${parseFloat(rec.Abono || 0).toFixed(2)}`;
+    const pending = `$${parseFloat(rec.Saldo_Pendiente || 0).toFixed(2)}`;
+
+    let y = 14;
+
+    // Encabezado
+    doc.setFillColor(37, 99, 235);
+    doc.rect(15, y, 180, 10, 'F');
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    doc.text("COMPROBANTE DE RECEPCION TECNICA (COPIA DEL CLIENTE)", 105, y + 6.8, { align: "center" });
+    y += 16;
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(15);
+    doc.text("COMPUKIT - SERVICIO TECNICO ESPECIALIZADO", 105, y, { align: "center" });
+    y += 6;
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Fecha: ${rec.Fecha_Ingreso || new Date().toLocaleString()}   |   N Orden: ${rec.ID_Orden}`, 105, y, { align: "center" });
+    y += 4;
+    doc.setDrawColor(37, 99, 235);
+    doc.setLineWidth(0.5);
+    doc.line(15, y, 195, y);
+    doc.setLineWidth(0.2);
+    y += 8;
+
+    // Ficha de Datos
+    doc.setFillColor(245, 247, 250);
+    doc.rect(15, y, 180, 42, 'F');
+    doc.setDrawColor(200, 210, 225);
+    doc.rect(15, y, 180, 42);
+
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("Cliente:", 18, y + 7);
+    doc.setFont("helvetica", "normal");
+    doc.text(`${cleanClient}   (Tel: ${cleanPhone})`, 36, y + 7);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Equipo:", 18, y + 14);
+    doc.setFont("helvetica", "normal");
+    doc.text(cleanEq, 36, y + 14);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Accesorios:", 18, y + 21);
+    doc.setFont("helvetica", "normal");
+    doc.text(cleanAcc, 40, y + 21);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Atendido por:", 18, y + 28);
+    doc.setFont("helvetica", "normal");
+    doc.text(rec.Tecnico_Responsable || "Principal", 42, y + 28);
+
+    doc.setFont("helvetica", "bold");
+    doc.text("Falla / Motivo:", 18, y + 35);
+    doc.setFont("helvetica", "italic");
+    const splitIssue = doc.splitTextToSize(cleanIssue, 142);
+    doc.text(splitIssue[0] || cleanIssue, 43, y + 35);
+    y += 48;
+
+    // Resumen de Valores
+    doc.setFillColor(240, 253, 244);
+    doc.rect(15, y, 58, 16, 'F');
+    doc.setDrawColor(34, 197, 94);
+    doc.rect(15, y, 58, 16);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(22, 163, 74);
+    doc.text("COSTO ESTIMADO", 44, y + 5, { align: "center" });
+    doc.setFontSize(11);
+    doc.text(costTotal, 44, y + 12, { align: "center" });
+
+    doc.setFillColor(239, 246, 255);
+    doc.rect(76, y, 58, 16, 'F');
+    doc.setDrawColor(59, 130, 246);
+    doc.rect(76, y, 58, 16);
+    doc.setFontSize(8);
+    doc.setTextColor(37, 99, 235);
+    doc.text("ABONO RECIBIDO", 105, y + 5, { align: "center" });
+    doc.setFontSize(11);
+    doc.text(advance, 105, y + 12, { align: "center" });
+
+    doc.setFillColor(254, 242, 242);
+    doc.rect(137, y, 58, 16, 'F');
+    doc.setDrawColor(239, 68, 68);
+    doc.rect(137, y, 58, 16);
+    doc.setFontSize(8);
+    doc.setTextColor(220, 38, 38);
+    doc.text("SALDO PENDIENTE", 166, y + 5, { align: "center" });
+    doc.setFontSize(11);
+    doc.text(pending, 166, y + 12, { align: "center" });
+    y += 22;
+
+    // Términos y Condiciones
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text("1. Diagnostico estimado de 24 a 48 horas laborables.", 18, y);
+    doc.text("2. Todo trabajo y repuesto cuenta con garantia tecnica sobre el servicio realizado.", 18, y + 4.5);
+    doc.text("3. Equipos no retirados luego de 60 dias de notificados seran considerados abandonados.", 18, y + 9);
+    y += 22;
+
+    // Firma
+    doc.setDrawColor(180, 180, 180);
+    doc.line(65, y, 145, y);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    doc.text("Firma del Tecnico / Sello Compukit", 105, y + 5, { align: "center" });
+
+    doc.save(`Comprobante_Cliente_${rec.ID_Orden}.pdf`);
   }
 
   closeModal(modalId) {

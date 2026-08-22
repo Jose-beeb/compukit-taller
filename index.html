@@ -621,8 +621,65 @@
 
       </div>
 
-      <div class="btn-group" style="margin-top: 16px;">
-        <button class="btn btn-primary" style="width: 100%; font-size: 1.15rem; padding: 14px;" onclick="window.app && window.app.downloadPDFTicket()">📥 Descargar Comprobante en PDF</button>
+      <div class="btn-group" style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn btn-whatsapp" style="width: 100%; font-size: 1.05rem; min-height: 50px;" onclick="window.app && window.app.sendWhatsAppReceipt(window.app.currentTicketRecord ? window.app.currentTicketRecord.ID_Orden : null)">
+          📲 Enviar Comprobante por WhatsApp
+        </button>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button class="btn btn-primary" style="width: 100%; font-size: 0.95rem; min-height: 48px;" onclick="window.app && window.app.downloadClientCopyPDF()">
+            📄 Copia Cliente (PDF)
+          </button>
+          <button class="btn btn-secondary" style="width: 100%; font-size: 0.95rem; min-height: 48px;" onclick="window.app && window.app.downloadPDFTicket()">
+            🖨️ Ticket Doble (PDF)
+          </button>
+        </div>
+        <button class="btn btn-secondary" style="width: 100%; font-size: 0.95rem;" onclick="window.app && window.app.closeModal('modal-ticket')">
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ÉXITO POST-INGRESO Y COMPROBANTE DIGITAL -->
+  <div id="modal-entry-success" class="modal-overlay" onclick="if(event.target === this) window.app && window.app.closeModal('modal-entry-success')">
+    <div class="modal-card" style="max-width: 540px; text-align: center; padding: 20px;">
+      <div style="font-size: 3rem; margin-bottom: 4px;">🎉</div>
+      <h2 style="color: var(--success); font-size: 1.4rem; margin-bottom: 6px;">¡Equipo Ingresado con Éxito!</h2>
+      <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 12px;">El registro fue guardado correctamente.</p>
+
+      <div style="background: var(--bg-secondary); border: 2px solid var(--border-color); border-radius: var(--radius-md); padding: 12px; text-align: left; margin-bottom: 16px; font-size: 0.95rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; margin-bottom: 6px;">
+          <strong style="color: var(--primary);">N° de Orden:</strong>
+          <span id="entry-success-id" style="font-weight: 800; font-size: 1.1rem; color: var(--primary);">CK-XXXXXX</span>
+        </div>
+        <div style="margin-bottom: 4px;"><strong>👤 Cliente:</strong> <span id="entry-success-client"></span></div>
+        <div style="margin-bottom: 4px;"><strong>📞 Celular:</strong> <span id="entry-success-phone"></span></div>
+        <div style="margin-bottom: 4px;"><strong>💻 Equipo:</strong> <span id="entry-success-equipment"></span></div>
+        <div><strong>🔌 Accesorios:</strong> <span id="entry-success-accessories"></span></div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <button class="btn btn-whatsapp" style="font-size: 1.15rem; min-height: 56px; width: 100%; box-shadow: 0 4px 12px rgba(37, 211, 102, 0.25);" onclick="window.app && window.app.sendWhatsAppReceipt()">
+          📲 Enviar Comprobante por WhatsApp
+        </button>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button class="btn btn-secondary" style="font-size: 0.9rem; min-height: 48px; display: flex; align-items: center; justify-content: center; text-align: center;" onclick="window.app && window.app.downloadClientCopyPDF()">
+            📄 Copia Cliente (PDF)
+          </button>
+          <button class="btn btn-secondary" style="font-size: 0.9rem; min-height: 48px; display: flex; align-items: center; justify-content: center; text-align: center;" onclick="window.app && window.app.downloadPDFTicket()">
+            🖨️ Ticket Doble (PDF)
+          </button>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px;">
+          <button class="btn btn-primary" style="font-size: 1rem; min-height: 48px;" onclick="window.app && window.app.nextClientFromModal()">
+            ➕ Siguiente Cliente
+          </button>
+          <button class="btn btn-secondary" style="font-size: 1rem; min-height: 48px;" onclick="window.app && window.app.goToWorkshopFromModal()">
+            🛠️ Ver en Taller
+          </button>
+        </div>
       </div>
     </div>
   </div>
